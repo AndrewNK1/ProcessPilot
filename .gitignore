@@ -37,6 +37,7 @@ env/
 # --- local tooling state ----------------------------------------------------
 # Session locks and machine-specific permission grants with absolute paths.
 .claude/
+CLAUDE.md
 
 # --- editors / os -----------------------------------------------------------
 .vscode/

@@ -12,10 +12,10 @@ authors = [{ name = "Antoni Ashraf" }]
 
 # Upper bounds added after Phase 0: pip had resolved pandas 3.0 and langchain
 # 1.4 (both newer majors than expected from memory). Bounds below cap each
-# dependency one major above what Phase 0 verified working, so a future
+# dependency one major above the versions verified working, so a future
 # `pip install` can't silently jump to an untested major. See
-# requirements.lock for the exact frozen set and CLAUDE.md for what was
-# actually tested against pandas 3.0 / langchain 1.x.
+# requirements.lock for the exact frozen set that was actually tested
+# against pandas 3.0 / langchain 1.x.
 dependencies = [
     # Deterministic computation layer: every number in the system comes from here.
     "pm4py>=2.7.11,<3.0",

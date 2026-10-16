@@ -49,4 +49,34 @@ pytest
 | `configs/` | dataset presets and the redesign heuristics catalogue |
 | `notebooks/` | per-phase evaluation notebooks |
 
-Project rules live in [CLAUDE.md](CLAUDE.md).
+## Design principles
+
+1. **Deterministic computation, LLM reasoning.** pm4py/pandas compute every
+   number; the LLM only interprets precomputed evidence. It never sees raw
+   event data and never calculates a metric.
+2. **Evidence-grounded.** Every finding carries a stable evidence ID. Agent
+   claims must cite them, and outputs citing unknown IDs are rejected and
+   retried.
+3. **Fixed pipeline.** An explicit LangGraph graph with typed (Pydantic)
+   structured outputs — not a free-roaming agent.
+4. **Source-agnostic.** File, SQL and ERP inputs all pass through one
+   `DataSource` interface into a single canonical schema.
+5. **Segment-aware.** The pipeline runs per segment (configurable via
+   `segment_by`), since e.g. each BPI 2019 `Item Category` is a materially
+   different purchase-to-pay flow.
+6. **Human in the loop.** The final step is a LangGraph `interrupt()` for
+   analyst approval. The system never executes a change.
+7. **Reproducible.** Model id, prompts and library versions are logged per run
+   to `outputs/runs/<run_id>/`; `requirements.lock` pins the verified
+   dependency set.
+
+## Dataset
+
+Evaluated on the [BPI Challenge 2019](https://data.4tu.nl/articles/_/12715853)
+purchase-to-pay log (1,595,923 events / 251,734 cases). The raw file is **not**
+in this repository — point `PP_BPI2019_PATH` at your own copy.
+
+## License note
+
+pm4py (community edition) is AGPL v3, which has implications for any
+derivative distribution of this project.
