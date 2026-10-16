@@ -86,6 +86,11 @@ analysis:
 # --- conformance rules (P2P domain rules) ---------------------------------
 # Rule types are implemented generically in mining/conformance.py; the rules
 # themselves are data. `applies_to_segments: null` means all segments.
+#
+# Each rule's `checked` note records what was measured against the real log
+# (2026-10-16, uncleaned, all 251,734 cases). For order rules "violations"
+# counts cases containing both activities where the first B precedes the
+# first A. These are plausibility checks of the rule, not Phase 2 results.
 conformance_rules:
   - id: R-01
     name: three_way_match_order
@@ -98,19 +103,27 @@ conformance_rules:
       b: "Record Invoice Receipt"
     applies_to_segments:
       - "3-way match, invoice after GR"
-    verify: false  # confirmed against the real log in Phase 1
+    # checked: 11,128 cases contain both; 0 violations. Holds by construction
+    # in this category, so it guards data integrity rather than finding issues.
 
+  # R-02 REPLACED in the Phase 1 review. The original rule required "Clear
+  # Invoice" before "Vendor creates debit memo" and described it as payment
+  # control -- but a debit memo is a vendor credit, not a payment, and it
+  # normally precedes clearing: 5,441 of 5,676 cases with both (96%) "violated"
+  # it. A rule that most compliant cases break would have produced a false
+  # headline finding in Phase 2.
   - id: R-02
-    name: payment_after_clearing
+    name: invoice_recorded_before_cleared
     type: activity_a_before_activity_b
     description: >-
-      An invoice must be cleared before payment leaves the company; the
-      reverse order means money moved without approval.
+      An invoice must be recorded before it is cleared; clearing an invoice
+      that was never recorded bypasses the invoice-verification control.
     params:
-      a: "Clear Invoice"
-      b: "Vendor creates debit memo"
+      a: "Record Invoice Receipt"
+      b: "Clear Invoice"
     applies_to_segments: null
-    verify: false  # confirmed against the real log in Phase 1
+    # checked: 183,293 cases contain both; 24 violations (7 in "3-way match,
+    # invoice after GR", 17 in "3-way match, invoice before GR").
 
   - id: R-03
     name: invoice_must_occur
@@ -120,8 +133,17 @@ conformance_rules:
       absence indicates either an incomplete case or a process breakdown.
     params:
       activity: "Record Invoice Receipt"
-    applies_to_segments: null
-    verify: false  # confirmed against the real log in Phase 1
+    # RESTRICTED in the Phase 1 review: Consignment items are invoiced outside
+    # this log (0 of 14,498 Consignment cases contain the activity), so the
+    # rule would flag 100% of that segment as a false violation.
+    applies_to_segments:
+      - "2-way match"
+      - "3-way match, invoice after GR"
+      - "3-way match, invoice before GR"
+    # checked: missing in 357 / 1,044 (2-way), 4,054 / 15,182 (3-way after GR),
+    # 21,446 / 221,010 (3-way before GR). OPEN QUESTION for Phase 2: the log
+    # is a time window, so part of these are cases still running at extraction,
+    # not breakdowns -- Phase 2 must separate the two before reporting it.
 
   - id: R-04
     name: goods_receipt_required_for_three_way
@@ -134,7 +156,8 @@ conformance_rules:
     applies_to_segments:
       - "3-way match, invoice after GR"
       - "3-way match, invoice before GR"
-    verify: false  # confirmed against the real log in Phase 1
+    # checked: missing in 643 / 15,182 (after GR) and 14,536 / 221,010
+    # (before GR); same open-case caveat as R-03.
 
 # --- redesign constraints -------------------------------------------------
 # Machine-readable subset of the analyst's constraints, enforced by

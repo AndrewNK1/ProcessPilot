@@ -5,12 +5,13 @@ rows changes every downstream metric. For a thesis the removals have to be
 defensible and reproducible, so the caller chooses an explicit policy and every
 removal is recorded in the report that accompanies the results.
 
-Checks: nulls in required columns; unparseable timestamps; timestamps outside
-a configured plausible range (BPI 2019 contains 1948 and 2070 dates);
-single-event cases; duplicate events; non-monotonic timestamps within a case
-after sorting; timestamp ties within a case (these make directly-follows order
-ambiguous, so they bound the trustworthiness of every waiting-time number);
-activity cardinality; overall log size.
+Checks: nulls in required columns; unparseable timestamps (kept apart from
+missing ones via ``timestamp_raw``); timestamps outside a configured plausible
+range (BPI 2019 contains 1948 and 2070 dates); single-event cases; duplicate
+events; non-monotonic timestamps within a case in the log's row order (i.e.
+the canonical sort guarantee is broken); timestamp ties within a case (these
+make directly-follows order ambiguous, so they bound the trustworthiness of
+every waiting-time number); activity cardinality; overall log size.
 
 Each issue carries severity (info/warn/error), a count, a share of rows, and
 example rows so an analyst can look at the actual data behind the warning.
@@ -23,13 +24,20 @@ from typing import Any, Literal
 import pandas as pd
 from pydantic import BaseModel
 
+from processpilot.schema import TIMESTAMP_RAW
+
 Severity = Literal["info", "warn", "error"]
 
 _MAX_EXAMPLE_ROWS = 5
 
 
 class DataQualityIssue(BaseModel):
-    """One finding. Code-generated, never an LLM guess about data quality."""
+    """One finding. Code-generated, never an LLM guess about data quality.
+
+    ``count`` is in the unit the message names (rows, cases, or activities);
+    ``share`` is always the share of event rows affected, so issues can be
+    compared against each other on one scale.
+    """
 
     code: str
     severity: Severity
@@ -89,11 +97,21 @@ def validate(
     n_rows = len(df)
     display_cols = ["case_id", "activity", "timestamp"]
 
+    # A NaT timestamp whose source value survives in ``timestamp_raw`` was
+    # present but unconvertible -- that is "unparseable", not "missing".
+    had_raw_value = (
+        df[TIMESTAMP_RAW].notna()
+        if TIMESTAMP_RAW in df.columns
+        else pd.Series(False, index=df.index)
+    )
+
     # --- nulls in required columns -------------------------------------
     for col in ("case_id", "activity", "timestamp"):
         if col not in df.columns:
             continue
         null_mask = df[col].isna()
+        if col == "timestamp":
+            null_mask &= ~had_raw_value
         if null_mask.any():
             issues.append(
                 DataQualityIssue(
@@ -110,7 +128,7 @@ def validate(
     if "timestamp" in df.columns:
         ts = df["timestamp"]
         if pd.api.types.is_datetime64_any_dtype(ts):
-            unparseable_mask = ts.isna()
+            unparseable_mask = ts.isna() & had_raw_value
         else:
             parsed = pd.to_datetime(ts, errors="coerce")
             unparseable_mask = parsed.isna() & ts.notna()
@@ -119,10 +137,15 @@ def validate(
                 DataQualityIssue(
                     code="unparseable_timestamp",
                     severity="error",
-                    message=f"{int(unparseable_mask.sum())} timestamp(s) could not be parsed.",
+                    message=(
+                        f"{int(unparseable_mask.sum())} timestamp(s) could not be parsed or "
+                        "lie outside the representable range (1677-2262)."
+                    ),
                     count=int(unparseable_mask.sum()),
                     share=float(unparseable_mask.mean()),
-                    example_rows=_example_rows(df, unparseable_mask, display_cols),
+                    example_rows=_example_rows(
+                        df, unparseable_mask, [*display_cols, TIMESTAMP_RAW]
+                    ),
                 )
             )
 
@@ -162,11 +185,11 @@ def validate(
                     code="single_event_case",
                     severity="warn",
                     message=(
-                        f"{len(small_cases)} case(s) have fewer than "
-                        f"{min_events_per_case_warn} event(s)."
+                        f"{len(small_cases)} case(s) ({int(mask.sum())} row(s)) have fewer "
+                        f"than {min_events_per_case_warn} event(s)."
                     ),
                     count=int(len(small_cases)),
-                    share=float(len(small_cases) / df["case_id"].nunique()),
+                    share=float(mask.mean()),
                     example_rows=_example_rows(df, mask, display_cols),
                 )
             )
@@ -187,21 +210,23 @@ def validate(
                 )
             )
 
-    # --- non-monotonic timestamps within a case after sort, and ties -----
+    # --- non-monotonic timestamps within a case, in the given row order ---
+    # Checked on the rows exactly as passed, NOT re-sorted: re-sorting first
+    # would make this check unable to ever fire. It guards the canonical
+    # guarantee that every event follows its predecessor in time.
     if {"case_id", "timestamp"}.issubset(df.columns):
-        sorted_df = df.sort_values(["case_id", "timestamp"], kind="stable")
-        same_case = sorted_df["case_id"] == sorted_df["case_id"].shift(1)
-        earlier_than_prev = sorted_df["timestamp"] < sorted_df["timestamp"].shift(1)
-        non_monotonic_mask = (same_case & earlier_than_prev).reindex(df.index, fill_value=False)
+        same_case_given = (df["case_id"] == df["case_id"].shift(1)).fillna(False)
+        earlier_given = (df["timestamp"] < df["timestamp"].shift(1)).fillna(False)
+        non_monotonic_mask = (same_case_given & earlier_given).astype(bool)
         if non_monotonic_mask.any():
             issues.append(
                 DataQualityIssue(
                     code="non_monotonic_timestamp",
                     severity="error",
                     message=(
-                        f"{int(non_monotonic_mask.sum())} row(s) are out of chronological order "
-                        "within their case even after sorting (should be impossible; indicates "
-                        "a sort or parsing bug upstream)."
+                        f"{int(non_monotonic_mask.sum())} row(s) are earlier than the previous "
+                        "event of the same case in row order: the log is not sorted by "
+                        "(case_id, timestamp), so it did not come through apply_mapping."
                     ),
                     count=int(non_monotonic_mask.sum()),
                     share=float(non_monotonic_mask.mean()),
@@ -209,8 +234,14 @@ def validate(
                 )
             )
 
-        same_timestamp_as_prev = sorted_df["timestamp"] == sorted_df["timestamp"].shift(1)
-        tie_mask = (same_case & same_timestamp_as_prev).reindex(df.index, fill_value=False)
+        sorted_df = df.sort_values(["case_id", "timestamp"], kind="stable")
+        same_case = (sorted_df["case_id"] == sorted_df["case_id"].shift(1)).fillna(False)
+        same_timestamp_as_prev = (sorted_df["timestamp"] == sorted_df["timestamp"].shift(1)).fillna(
+            False
+        )
+        tie_mask = (
+            (same_case & same_timestamp_as_prev).astype(bool).reindex(df.index, fill_value=False)
+        )
         if tie_mask.any():
             issues.append(
                 DataQualityIssue(
@@ -334,9 +365,7 @@ def apply_cleaning(
             )
             out = out.loc[~dup_mask].reset_index(drop=True)
 
-    new_report = report.model_copy(
-        update={"cleaning_log": cleaning_log, "event_count": len(out)}
-    )
+    new_report = report.model_copy(update={"cleaning_log": cleaning_log, "event_count": len(out)})
     if "case_id" in out.columns:
         new_report.case_count = int(out["case_id"].nunique())
     return out, new_report

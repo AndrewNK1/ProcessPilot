@@ -186,3 +186,46 @@ def test_apply_cleaning_drops_exact_duplicates_when_requested(
     c4 = cleaned_df[cleaned_df["case_id"] == "c4"]
     assert len(c4) == 2  # A, B -- one copy of the duplicated B removed
     assert cleaned_report.cleaning_log[0].rows_removed == 1
+
+
+# --- regressions found in the Phase 1 review --------------------------------
+
+
+def test_unparseable_timestamp_is_not_double_reported_as_null() -> None:
+    raw = pd.DataFrame(
+        {
+            "case": ["c1", "c1", "c2"],
+            "act": ["A", "B", "A"],
+            "ts": ["2019-01-01 10:00", "garbage", None],
+        }
+    )
+    report = validate(
+        apply_mapping(raw, ColumnMapping(case_id="case", activity="act", timestamp="ts"))
+    )
+    unparseable = _issue(report, "unparseable_timestamp")
+    null = _issue(report, "null_timestamp")
+    assert unparseable is not None and unparseable.count == 1
+    assert unparseable.example_rows[0]["timestamp_raw"] == "garbage"
+    assert null is not None and null.count == 1  # only the genuinely missing c2 value
+
+
+def test_non_monotonic_timestamp_detected_in_unsorted_input(
+    dirty_canonical_log: pd.DataFrame,
+) -> None:
+    """Regression: the check re-sorted first, so it could never fire."""
+    c1 = dirty_canonical_log[dirty_canonical_log["case_id"] == "c1"]
+    reversed_c1 = c1.iloc[::-1].reset_index(drop=True)
+    issue = _issue(validate(reversed_c1), "non_monotonic_timestamp")
+    assert issue is not None
+    assert issue.count == 2  # B after C, then A after B
+
+
+def test_canonical_log_has_no_non_monotonic_rows(dirty_canonical_log: pd.DataFrame) -> None:
+    assert _issue(validate(dirty_canonical_log), "non_monotonic_timestamp") is None
+
+
+def test_single_event_case_share_is_a_share_of_rows(dirty_canonical_log: pd.DataFrame) -> None:
+    issue = _issue(validate(dirty_canonical_log), "single_event_case")
+    assert issue is not None
+    # c3 is the only single-event case: 1 of the fixture's event rows.
+    assert issue.share == pytest.approx(1 / len(dirty_canonical_log))

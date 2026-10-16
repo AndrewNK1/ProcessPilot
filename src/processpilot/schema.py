@@ -10,6 +10,10 @@ Guarantees after ``apply_mapping`` + validation (Phase 1):
     - columns ``case_id`` (str), ``activity`` (str), ``timestamp``
       (tz-naive ``datetime64[ns]``) are present and non-null
     - optional ``resource`` (str) and ``segment`` (str)
+    - optional ``timestamp_raw`` (str): present only when some source
+      timestamps could not be converted; holds the original value on exactly
+      those rows (null elsewhere), so ``validate`` can tell an unparseable
+      value apart from a genuinely missing one
     - all other source columns preserved under an ``attr:`` prefix so no
       information is silently dropped
     - stably sorted by ``(case_id, timestamp)`` so event order within equal
@@ -22,6 +26,10 @@ import pandas as pd
 
 REQUIRED_COLUMNS = ("case_id", "activity", "timestamp")
 OPTIONAL_COLUMNS = ("resource", "segment")
+TIMESTAMP_RAW = "timestamp_raw"
+# pandas 3 infers microsecond resolution when parsing strings; the schema pins
+# nanoseconds so every source yields the same dtype (and pm4py's documented one).
+TIMESTAMP_DTYPE = "datetime64[ns]"
 CANONICAL_COLUMNS = REQUIRED_COLUMNS + OPTIONAL_COLUMNS
 
 # pm4py's standard column names (its "stream" / dataframe convention).
@@ -54,6 +62,8 @@ def assert_canonical_schema(df: pd.DataFrame) -> None:
         raise ValueError(f"'timestamp' must be datetime64, got {ts.dtype}")
     if getattr(ts.dt, "tz", None) is not None:
         raise ValueError("'timestamp' must be tz-naive")
+    if ts.dtype != TIMESTAMP_DTYPE:
+        raise ValueError(f"'timestamp' must be {TIMESTAMP_DTYPE}, got {ts.dtype}")
 
     sorted_df = df.sort_values(["case_id", "timestamp"], kind="stable")
     if not df.index.equals(sorted_df.index):

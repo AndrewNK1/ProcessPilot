@@ -77,3 +77,12 @@ def test_to_pm4py_renames_canonical_columns(canonical_log: pd.DataFrame) -> None
 def test_to_pm4py_refuses_dirty_data(canonical_log: pd.DataFrame) -> None:
     with pytest.raises(ValueError):
         to_pm4py(canonical_log)  # has nulls; must not silently pass through
+
+
+def test_assert_canonical_schema_rejects_non_nanosecond_timestamp(
+    canonical_log: pd.DataFrame,
+) -> None:
+    clean = _clean_subset(canonical_log)
+    clean["timestamp"] = clean["timestamp"].astype("datetime64[us]")
+    with pytest.raises(ValueError, match=r"datetime64\[ns\]"):
+        assert_canonical_schema(clean)
