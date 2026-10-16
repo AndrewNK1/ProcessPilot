@@ -4,9 +4,12 @@
 # This file exists so that NOTHING about BPI 2019 is hardcoded in src/. The
 # engine reads a preset; swapping datasets means swapping this file only.
 #
-# STATUS: activity names and the case-attribute column names below are taken
-# from the BPI 2019 challenge documentation and are marked `verify: true`.
-# Phase 1 confirms them against the actual log and this file is corrected then.
+# STATUS: verified against the actual log in Phase 1 (full parse of the real
+# 728.6 MB XES, 2026-10-16): 1,595,923 events, 251,734 cases, 42 distinct
+# activities, 21 raw columns (16 case: attributes + 5 event attributes).
+# Every column name, activity name, and segment value below matched the
+# challenge documentation exactly EXCEPT the timestamp upper bound -- see the
+# `validation` block. Re-verify this block if the source file ever changes.
 # ---------------------------------------------------------------------------
 name: bpi2019
 description: >-
@@ -41,16 +44,25 @@ mapping:
 # `attr:` column rather than by changing this policy.
 timestamp_timezone_policy: utc
 
-verify_in_phase1:
-  - "case:Item Category"
-  - "org:resource"
+# Confirmed in Phase 1 against the real log:
+#   - "case:Item Category" has exactly 4 values, matching every
+#     `applies_to_segments` entry below verbatim:
+#       "3-way match, invoice before GR"  221,010 cases
+#       "3-way match, invoice after GR"    15,182 cases
+#       "Consignment"                      14,498 cases
+#       "2-way match"                       1,044 cases
+#   - "org:resource" is fully populated (0% null), 628 distinct resources.
 
 # --- validation thresholds (no magic numbers in code) ---------------------
 validation:
-  # BPI 2019 contains junk timestamps (e.g. 1948 and 2070) that must be
-  # surfaced, never silently repaired.
+  # BPI 2019 contains junk timestamps; the real min was 1948-01-26 (clearly a
+  # sentinel/default value, not a real SAP transaction) -- never silently
+  # repaired, only flagged. CORRECTED in Phase 1: the real max timestamp is
+  # 2020-04-09, which is *after* the originally configured upper bound of
+  # 2020-01-01 -- that bound would have wrongly flagged ~3 months of genuine
+  # events as junk. Widened with headroom above the observed max.
   plausible_timestamp_min: "2017-01-01"
-  plausible_timestamp_max: "2020-01-01"
+  plausible_timestamp_max: "2020-05-01"
   max_distinct_activities_warn: 200
   min_events_per_case_warn: 2
 
@@ -86,7 +98,7 @@ conformance_rules:
       b: "Record Invoice Receipt"
     applies_to_segments:
       - "3-way match, invoice after GR"
-    verify: true
+    verify: false  # confirmed against the real log in Phase 1
 
   - id: R-02
     name: payment_after_clearing
@@ -98,7 +110,7 @@ conformance_rules:
       a: "Clear Invoice"
       b: "Vendor creates debit memo"
     applies_to_segments: null
-    verify: true
+    verify: false  # confirmed against the real log in Phase 1
 
   - id: R-03
     name: invoice_must_occur
@@ -109,7 +121,7 @@ conformance_rules:
     params:
       activity: "Record Invoice Receipt"
     applies_to_segments: null
-    verify: true
+    verify: false  # confirmed against the real log in Phase 1
 
   - id: R-04
     name: goods_receipt_required_for_three_way
@@ -122,7 +134,7 @@ conformance_rules:
     applies_to_segments:
       - "3-way match, invoice after GR"
       - "3-way match, invoice before GR"
-    verify: true
+    verify: false  # confirmed against the real log in Phase 1
 
 # --- redesign constraints -------------------------------------------------
 # Machine-readable subset of the analyst's constraints, enforced by
