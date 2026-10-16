@@ -15,6 +15,8 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from processpilot.mining.settings import MiningSettings
+
 
 @pytest.fixture
 def synthetic_raw_log() -> pd.DataFrame:
@@ -85,3 +87,109 @@ def canonical_log(synthetic_raw_log: pd.DataFrame) -> pd.DataFrame:
         resource="org:resource",
     )
     return apply_mapping(synthetic_raw_log, mapping)
+
+
+@pytest.fixture
+def mining_log() -> pd.DataFrame:
+    """6 clean cases for the mining engine, every expected number hand-derived.
+
+    Times are hours after each case's own start day (cases never overlap in
+    meaning, so absolute dates do not matter). Resources in brackets.
+
+        c1  A(0)[r1]  B(1)[r1]  C(3)[r2]
+        c2  A(0)[r1]  B(2)[r2]  C(4)[r2]
+        c3  A(0)[r1]  B(1)[r1]  B(5)[r1]  C(6)[r2]        rework on B
+        c4  A(0)[r1]  C(10)[r3]                          skips B
+        c5  A(0)[r1]  B(1)[r1]  C(2)[r2]  C(2)[r2]       batch repeat of C
+        c6  A(0)[r2]  B(3)[r2]                           never reaches C
+
+    Answer key (mining view = c5's same-instant C collapsed, 17 events):
+        A->B  freq 5, waits [1,2,1,1,3]h  median 1h, mean 1.6h, P90 2.6h, share 5/6
+        B->C  freq 4, waits [2,2,1,1]h    median 1.5h, mean 1.5h, P90 2h, share 4/6
+        B->B  freq 1, 4h; A->C freq 1, 10h; each share 1/6
+        impact (h): A->C 1.667 > B->C 1.0 > A->B 0.833 > B->B 0.667
+        variants: ABC x3 (c1,c2,c5; median/mean throughput 3h), then AB, ABBC, AC
+        rework: only B (c3), extra = 6h - median(3,4,2,3)=3h -> 3h, impact 0.5h
+        throughput per case (h): 3,4,6,10,2,3 -> median 3.5, mean 4.667, P90 8
+        workload (raw, 18 events): r1 9, r2 8, r3 1
+        handover waits [2,2,1,10,1] median 2h; same-resource [1,1,1,2,3,4] median 1.5h
+    """
+    spec = {
+        "c1": [("A", 0, "r1"), ("B", 1, "r1"), ("C", 3, "r2")],
+        "c2": [("A", 0, "r1"), ("B", 2, "r2"), ("C", 4, "r2")],
+        "c3": [("A", 0, "r1"), ("B", 1, "r1"), ("B", 5, "r1"), ("C", 6, "r2")],
+        "c4": [("A", 0, "r1"), ("C", 10, "r3")],
+        "c5": [("A", 0, "r1"), ("B", 1, "r1"), ("C", 2, "r2"), ("C", 2, "r2")],
+        "c6": [("A", 0, "r2"), ("B", 3, "r2")],
+    }
+    rows = []
+    for day, (case, events) in enumerate(spec.items(), start=1):
+        start = pd.Timestamp(2019, 1, day)
+        rows += [(case, act, start + pd.Timedelta(hours=h), res) for act, h, res in events]
+    raw = pd.DataFrame(rows, columns=["case", "activity", "time", "user"])
+
+    from processpilot.ingest.mapping import ColumnMapping, apply_mapping
+
+    return apply_mapping(
+        raw, ColumnMapping(case_id="case", activity="activity", timestamp="time", resource="user")
+    )
+
+
+@pytest.fixture
+def mining_settings() -> MiningSettings:
+    """Settings with rules exercising every conformance code path on ``mining_log``."""
+    return MiningSettings.model_validate(
+        {
+            "discovery": {
+                "inductive_miner_noise_threshold": 0.0,
+                "dfg_min_edge_frequency_share": 0.5,
+            },
+            "analysis": {
+                "top_n_bottlenecks": 10,
+                "top_n_variants": 10,
+                "top_n_rework": 10,
+                "top_n_resources": 10,
+                "top_n_handovers": 10,
+                "max_example_cases": 5,
+            },
+            "case_completion": {"end_activities": ["C"]},
+            "conformance_rules": [
+                {
+                    "id": "R-1",
+                    "name": "a_before_c",
+                    "type": "activity_a_before_activity_b",
+                    "description": "A precedes C",
+                    "params": {"a": "A", "b": "C"},
+                },
+                {
+                    "id": "R-2",
+                    "name": "c_before_b",
+                    "type": "activity_a_before_activity_b",
+                    "description": "C precedes B",
+                    "params": {"a": "C", "b": "B"},
+                },
+                {
+                    "id": "R-3",
+                    "name": "c_occurs",
+                    "type": "activity_must_occur",
+                    "description": "C must occur",
+                    "params": {"activity": "C"},
+                },
+                {
+                    "id": "R-4",
+                    "name": "z_occurs",
+                    "type": "activity_must_occur",
+                    "description": "Z must occur",
+                    "params": {"activity": "Z"},
+                },
+                {
+                    "id": "R-5",
+                    "name": "other_segment_only",
+                    "type": "activity_must_occur",
+                    "description": "not for this segment",
+                    "params": {"activity": "A"},
+                    "applies_to_segments": ["other"],
+                },
+            ],
+        }
+    )

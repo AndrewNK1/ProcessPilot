@@ -81,7 +81,32 @@ discovery:
 analysis:
   top_n_bottlenecks: 10
   top_n_variants: 10
+  top_n_rework: 10
   top_n_resources: 15
+  top_n_handovers: 10
+  max_example_cases: 5
+
+# --- mining-time view of the log (Phase 2) ---------------------------------
+preprocessing:
+  # ~181k events are same-case, same-activity, same-instant repeats (137k
+  # "Record Service Entry Sheet", 43k "Record Goods Receipt"): line items
+  # posted together. Collapsed to one event for DFG/variants/rework so they do
+  # not appear as zero-wait loops or rework; resource workload keeps raw counts.
+  collapse_same_instant_repeats: true
+
+# A case counts as completed if its last activity is one of these. Measured
+# on the real log (last activity per case): Clear Invoice ends 77.8% of
+# "3-way before GR", 61.0% of "3-way after GR", 15.9% of "2-way match";
+# Consignment is never invoiced in this log and ends in Record Goods Receipt
+# for 90.6% of cases. Delete Purchase Order Item is a (cancelled) completion.
+case_completion:
+  end_activities:
+    - "Clear Invoice"
+    - "Delete Purchase Order Item"
+  per_segment:
+    "Consignment":
+      - "Record Goods Receipt"
+      - "Delete Purchase Order Item"
 
 # --- conformance rules (P2P domain rules) ---------------------------------
 # Rule types are implemented generically in mining/conformance.py; the rules
@@ -121,7 +146,12 @@ conformance_rules:
     params:
       a: "Record Invoice Receipt"
       b: "Clear Invoice"
-    applies_to_segments: null
+    # Consignment is never invoiced in this log, so the rule cannot be
+    # evaluated there (0 cases contain both activities).
+    applies_to_segments:
+      - "2-way match"
+      - "3-way match, invoice after GR"
+      - "3-way match, invoice before GR"
     # checked: 183,293 cases contain both; 24 violations (7 in "3-way match,
     # invoice after GR", 17 in "3-way match, invoice before GR").
 
