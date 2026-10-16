@@ -1,0 +1,135 @@
+# ---------------------------------------------------------------------------
+# Dataset preset: BPI Challenge 2019 (purchase-to-pay).
+#
+# This file exists so that NOTHING about BPI 2019 is hardcoded in src/. The
+# engine reads a preset; swapping datasets means swapping this file only.
+#
+# STATUS: activity names and the case-attribute column names below are taken
+# from the BPI 2019 challenge documentation and are marked `verify: true`.
+# Phase 1 confirms them against the actual log and this file is corrected then.
+# ---------------------------------------------------------------------------
+name: bpi2019
+description: >-
+  BPI Challenge 2019 purchase-to-pay event log from a multinational coatings
+  and paints company. ~250k purchase order items, 4 item categories that
+  correspond to genuinely different P2P flows.
+
+source:
+  type: file
+  # Resolved from the environment so the machine-specific absolute path is
+  # never committed. See .env.example.
+  path_env: PP_BPI2019_PATH
+
+# --- column mapping (ColumnMapping in ingest/mapping.py) -------------------
+# XES standard attributes; pm4py exposes case attributes with a `case:` prefix.
+mapping:
+  case_id: "case:concept:name"
+  activity: "concept:name"
+  timestamp: "time:timestamp"
+  resource: "org:resource"
+  # Each Item Category is a materially different purchase-to-pay flow, so the
+  # pipeline runs per category rather than on a blended model.
+  segment_by: "case:Item Category"
+  timestamp_format: null # ISO 8601 in XES; pm4py parses it.
+
+# XES timestamps are timezone-aware but the canonical schema requires tz-naive
+# datetime64[ns]. DECISION (Phase 0): convert to UTC, then drop the offset.
+# WHY: UTC is monotonic, so a waiting time spanning a DST boundary is correct.
+# COST: wall-clock values shift 1-2h from what a user sees in the source ERP,
+# which only matters for working-hour / resource-calendar analysis. If such
+# analysis is added later, the local wall clock must be kept as a separate
+# `attr:` column rather than by changing this policy.
+timestamp_timezone_policy: utc
+
+verify_in_phase1:
+  - "case:Item Category"
+  - "org:resource"
+
+# --- validation thresholds (no magic numbers in code) ---------------------
+validation:
+  # BPI 2019 contains junk timestamps (e.g. 1948 and 2070) that must be
+  # surfaced, never silently repaired.
+  plausible_timestamp_min: "2017-01-01"
+  plausible_timestamp_max: "2020-01-01"
+  max_distinct_activities_warn: 200
+  min_events_per_case_warn: 2
+
+# Cleaning is opt-in and chosen by the caller; listed here as the suggested
+# default policy for this dataset, not as something applied automatically.
+suggested_cleaning_policy:
+  drop_cases_with_out_of_range_timestamps: true
+  drop_single_event_cases: false
+  drop_exact_duplicate_events: false
+
+# --- discovery -------------------------------------------------------------
+discovery:
+  inductive_miner_noise_threshold: 0.2
+  dfg_min_edge_frequency_share: 0.01
+
+analysis:
+  top_n_bottlenecks: 10
+  top_n_variants: 10
+  top_n_resources: 15
+
+# --- conformance rules (P2P domain rules) ---------------------------------
+# Rule types are implemented generically in mining/conformance.py; the rules
+# themselves are data. `applies_to_segments: null` means all segments.
+conformance_rules:
+  - id: R-01
+    name: three_way_match_order
+    type: activity_a_before_activity_b
+    description: >-
+      In a three-way match the goods receipt must be recorded before the
+      invoice is recorded, otherwise the match cannot be performed on receipt.
+    params:
+      a: "Record Goods Receipt"
+      b: "Record Invoice Receipt"
+    applies_to_segments:
+      - "3-way match, invoice after GR"
+    verify: true
+
+  - id: R-02
+    name: payment_after_clearing
+    type: activity_a_before_activity_b
+    description: >-
+      An invoice must be cleared before payment leaves the company; the
+      reverse order means money moved without approval.
+    params:
+      a: "Clear Invoice"
+      b: "Vendor creates debit memo"
+    applies_to_segments: null
+    verify: true
+
+  - id: R-03
+    name: invoice_must_occur
+    type: activity_must_occur
+    description: >-
+      Every completed purchase order item must have an invoice receipt; its
+      absence indicates either an incomplete case or a process breakdown.
+    params:
+      activity: "Record Invoice Receipt"
+    applies_to_segments: null
+    verify: true
+
+  - id: R-04
+    name: goods_receipt_required_for_three_way
+    type: activity_must_occur
+    description: >-
+      Categories that require a goods receipt must contain one; a missing GR
+      means the three-way match was bypassed.
+    params:
+      activity: "Record Goods Receipt"
+    applies_to_segments:
+      - "3-way match, invoice after GR"
+      - "3-way match, invoice before GR"
+    verify: true
+
+# --- redesign constraints -------------------------------------------------
+# Machine-readable subset of the analyst's constraints, enforced by
+# apply_edits (not merely suggested to the LLM).
+redesign:
+  protected_activities:
+    - "Clear Invoice"
+  constraints_text:
+    - "Invoice clearing is a financial control and may never be removed."
+    - "Goods receipt recording cannot be removed for physical-goods categories."

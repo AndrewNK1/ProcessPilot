@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "processpilot"
+version = "0.1.0"
+description = "Agentic AI consultant for the Analysis and Redesign phases of the BPM lifecycle."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+authors = [{ name = "Antoni Ashraf" }]
+
+# Upper bounds added after Phase 0: pip had resolved pandas 3.0 and langchain
+# 1.4 (both newer majors than expected from memory). Bounds below cap each
+# dependency one major above what Phase 0 verified working, so a future
+# `pip install` can't silently jump to an untested major. See
+# requirements.lock for the exact frozen set and CLAUDE.md for what was
+# actually tested against pandas 3.0 / langchain 1.x.
+dependencies = [
+    # Deterministic computation layer: every number in the system comes from here.
+    "pm4py>=2.7.11,<3.0",
+    "pandas>=2.2,<4.0",
+    "pyarrow>=15,<27",
+    # Typed data crossing module boundaries.
+    "pydantic>=2.7,<3.0",
+    # Agent orchestration (fixed graph, not a free-roaming agent).
+    "langgraph>=0.2.40,<2.0",
+    "langchain-core>=0.3,<2.0",
+    # init_chat_model lives in `langchain`, which is what makes PP_MODEL provider-swappable.
+    "langchain>=0.3,<2.0",
+    # Config + secrets.
+    "pyyaml>=6.0,<7.0",
+    "python-dotenv>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+ui = [
+    "streamlit>=1.40,<2.0",
+]
+dev = [
+    "pytest>=8.0,<10.0",
+    "ruff>=0.6,<1.0",
+    "jupyter>=1.0,<2.0",
+    "ipykernel>=6.29,<7.0",
+]
+sql = [
+    "sqlalchemy>=2.0,<3.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Keep the synthetic-log unit tests the default run; BPI 2019 tests are opt-in because
+# they need a 695 MB file that is not part of the repo.
+addopts = "-q -m 'not bpi2019'"
+markers = [
+    "bpi2019: integration test requiring the BPI Challenge 2019 log at PP_BPI2019_PATH",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN", "D"]
+ignore = [
+    "D203",  # conflicts with D211
+    "D213",  # conflicts with D212
+    "ANN401",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D103", "ANN201", "ANN001"]
+"notebooks/*" = ["D", "ANN"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

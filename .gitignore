@@ -1,0 +1,42 @@
+# --- secrets and machine-specific paths -------------------------------------
+# PP_BPI2019_PATH is machine specific and the file itself must never enter the repo.
+.env
+.env.local
+*.key
+
+# --- derived data -----------------------------------------------------------
+# Parquet caches are reproducible from the raw log; raw logs live outside the repo.
+# Note the `/*` form: git cannot re-include a file inside an excluded directory,
+# so the directory itself must stay listed while its contents are excluded.
+data/processed/*
+!data/processed/.gitkeep
+
+# Agent + mining run artefacts are regenerated per run.
+outputs/runs/
+outputs/*/
+!outputs/.gitkeep
+
+# --- raw event data must never be committed (defence in depth) --------------
+*.xes
+*.xes.gz
+*.parquet
+
+# --- python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- editors / os -----------------------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.sf/

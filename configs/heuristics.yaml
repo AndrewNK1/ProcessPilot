@@ -1,0 +1,122 @@
+# ---------------------------------------------------------------------------
+# Redesign heuristics catalogue (Reijers & Mansar, 2005 - "Best practices in
+# business process redesign").
+#
+# The redesign agent may ONLY select a heuristic_id that appears here. This is
+# what keeps proposals inside an academically defensible design space instead
+# of letting the model invent interventions.
+#
+# STATUS: Phase 0 scaffold. The `applicability` expressions are written against
+# evidence metric names that Phase 2 defines, so they are finalised in Phase 4
+# once the evidence schema is fixed. Names/descriptions are final.
+# ---------------------------------------------------------------------------
+version: 0
+
+heuristics:
+  - id: H-TASK-ELIMINATION
+    name: Task elimination
+    description: >-
+      Remove a task that adds no value for the customer or for a control
+      objective. Typically applied to checks that almost never find anything.
+    applicability: "Task is non-value-adding or its control rarely triggers."
+    typical_operations: [remove_activity]
+    risks: "Removes a control; only valid where the control's hit rate is near zero."
+
+  - id: H-TASK-COMPOSITION
+    name: Task composition
+    description: >-
+      Combine small tasks into one composite task to cut handover and setup
+      time between them.
+    applicability: "Two consecutive tasks with high co-occurrence and handover wait."
+    typical_operations: [merge_activities]
+    risks: "Larger tasks reduce flexibility and can raise required skill level."
+
+  - id: H-RESEQUENCING
+    name: Resequencing
+    description: >-
+      Move a task to a different position in the process, e.g. earlier, so
+      that downstream waiting or rework is avoided.
+    applicability: "A late task causes rework or blocks an earlier decision."
+    typical_operations: [reorder_activities]
+    risks: "Earlier execution may act on information that is not yet final."
+
+  - id: H-PARALLELISM
+    name: Parallelism
+    description: >-
+      Execute tasks that have no real data dependency concurrently instead of
+      sequentially, so the segment costs max() rather than sum() of durations.
+    applicability: "Sequential tasks with no data dependency and significant combined wait."
+    typical_operations: [parallelize_activities]
+    risks: "Coordination overhead; invalid if a hidden dependency exists."
+
+  - id: H-TRIAGE
+    name: Triage
+    description: >-
+      Split a general task into alternative variants for different case types,
+      or merge variants into one task when the distinction no longer pays off.
+    applicability: "One task shows strongly bimodal duration across case types."
+    typical_operations: [add_activity, reorder_activities]
+    risks: "More process variants to maintain and govern."
+
+  - id: H-KNOCKOUT
+    name: Knock-out ordering
+    description: >-
+      Order checks that can terminate a case by decreasing rejection rate per
+      unit of effort, so cheap rejections happen first.
+    applicability: "Multiple sequential checks where a late check rejects many cases."
+    typical_operations: [reorder_activities]
+    risks: "Requires reliable rejection-rate data per check."
+
+  - id: H-AUTOMATION
+    name: Automation
+    description: >-
+      Replace manual execution of a task with system execution, removing the
+      queueing time that human capacity imposes.
+    applicability: "High-frequency, low-variance task with large waiting relative to its own duration."
+    typical_operations: [add_activity, remove_activity]
+    risks: "Implementation cost; exception handling must stay manual."
+
+  - id: H-INTEGRAL-TECHNOLOGY
+    name: Integral technology
+    description: >-
+      Remove a physical or informational constraint by applying technology,
+      e.g. electronic invoicing removing postal transfer delay.
+    applicability: "Waiting time is dominated by information transfer, not work."
+    typical_operations: [remove_activity, merge_activities]
+    risks: "Depends on counterparty capability, e.g. supplier readiness."
+
+  - id: H-EXCEPTION
+    name: Exception isolation
+    description: >-
+      Design the mainstream flow for normal cases and route exceptions to a
+      separate path, so exceptions stop disturbing the happy path.
+    applicability: "A small share of variants accounts for a large share of throughput time."
+    typical_operations: [add_activity, reorder_activities]
+    risks: "Needs a reliable early classifier to route cases."
+
+  - id: H-CASE-BASED-WORK
+    name: Case-based work / batch removal
+    description: >-
+      Stop batching cases and process them individually to remove the waiting
+      time cases spend sitting in a batch.
+    applicability: "Waiting times cluster at periodic intervals, indicating batching."
+    typical_operations: [remove_activity, reorder_activities]
+    risks: "Loses economies of scale in setup-heavy tasks."
+
+  - id: H-NUMERICAL-INVOLVEMENT
+    name: Numerical involvement
+    description: >-
+      Minimise the number of departments, groups or people involved in a
+      process to reduce handovers and coordination.
+    applicability: "High handover count or many distinct resources per case."
+    typical_operations: [merge_activities, remove_activity]
+    risks: "Can concentrate risk and reduce segregation of duties."
+
+  - id: H-EXTRA-RESOURCES
+    name: Extra resources
+    description: >-
+      Increase capacity at a specific task where queueing, not task duration,
+      drives throughput time.
+    applicability: "Resource workload highly skewed and waiting concentrated at one task."
+    typical_operations: []
+    risks: "Cost; does not fix structural problems. Capacity-only change, no BPMN edit."

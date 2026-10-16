@@ -1,0 +1,2 @@
+# Mining and agent run artefacts (BPMN, evidence JSON, run logs) land in
+# outputs/runs/<run_id>/. Contents are gitignored.

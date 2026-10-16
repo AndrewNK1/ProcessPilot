@@ -1,0 +1,2 @@
+# Parquet cache for parsed event logs. Contents are gitignored and
+# regenerable; raw event data must never be placed here or anywhere in the repo.
