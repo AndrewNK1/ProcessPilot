@@ -83,6 +83,21 @@ def load_preset_yaml(name_or_path: Path | str) -> dict[str, Any]:
     return raw
 
 
+def load_config_yaml(*parts: str) -> dict[str, Any]:
+    """Parse ``configs/<parts...>`` (e.g. ``("domain", "p2p.yaml")``) into a dict.
+
+    For non-preset configuration (agent settings, heuristics catalogue,
+    domain knowledge); presets go through ``load_preset_yaml``.
+    """
+    path = find_project_root().joinpath(_CONFIGS_DIRNAME, *parts)
+    if not path.is_file():
+        raise FileNotFoundError(f"config file not found: {path}")
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"config {path} must be a YAML mapping, got {type(raw).__name__}")
+    return raw
+
+
 def resolve_source_path(preset: dict[str, Any]) -> Path:
     """Turn a preset's ``source.path_env`` into an existing file path.
 

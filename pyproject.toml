@@ -28,6 +28,14 @@ dependencies = [
     "langchain-core>=0.3,<2.0",
     # init_chat_model lives in `langchain`, which is what makes PP_MODEL provider-swappable.
     "langchain>=0.3,<2.0",
+    # Provider package for the default PP_MODEL (anthropic:...); verified 1.7.6.
+    # Other providers need their own langchain-<provider> package installed.
+    "langchain-anthropic>=1.7,<2.0",
+    # Local fallback (PP_MODEL=ollama:...); verified 1.1.0 with Ollama 0.40.5.
+    # `reasoning=False` -> Ollama `think: false` (configs/agent.yaml).
+    "langchain-ollama>=1.1,<2.0",
+    # SQLite checkpointer: human_review's interrupt() must survive a restart.
+    "langgraph-checkpoint-sqlite>=3.0,<4.0",
     # Config + secrets.
     "pyyaml>=6.0,<7.0",
     "python-dotenv>=1.0,<2.0",
@@ -54,9 +62,11 @@ where = ["src"]
 testpaths = ["tests"]
 # Keep the synthetic-log unit tests the default run; BPI 2019 tests are opt-in because
 # they need a 695 MB file that is not part of the repo.
-addopts = "-q -m 'not bpi2019'"
+addopts = "-q -m 'not bpi2019 and not llm'"
 markers = [
     "bpi2019: integration test requiring the BPI Challenge 2019 log at PP_BPI2019_PATH",
+    "llm: integration test calling the real model in PP_MODEL (costs money; opt-in)",
+    "ollama: reliability probe against a local Ollama model (slow on CPU; opt-in)",
 ]
 
 [tool.ruff]

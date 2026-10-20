@@ -1,0 +1,59 @@
+# ---------------------------------------------------------------------------
+# Agent (Phase 3) settings. Dataset-independent: dataset knowledge lives in
+# the preset (constraints, domain_knowledge), not here.
+# ---------------------------------------------------------------------------
+
+model:
+  # The model id itself comes from this environment variable (provider-
+  # swappable via init_chat_model), so switching models never edits a file
+  # in the repo.
+  env_var: PP_MODEL
+  # Passed straight to init_chat_model -> the provider's chat class, chosen by
+  # the provider prefix of PP_MODEL. A provider missing here fails loudly:
+  # some chat classes silently ignore unknown keys, so sharing one dict would
+  # quietly run with provider defaults.
+  init_kwargs:
+    # ChatAnthropic (langchain-anthropic 1.7). `effort` is set explicitly
+    # because Claude Opus 5.5's implicit default is `medium`; diagnosis is
+    # reasoning-heavy, so `high` is used and logged. Thinking cannot be
+    # disabled on Opus 5.5, and sampling params (temperature, seed) are
+    # rejected, so LLM output is NOT bit-reproducible: reproducibility comes
+    # from logging every prompt and raw output instead.
+    anthropic:
+      effort: high
+      max_tokens: 16000
+    # ChatOllama (langchain-ollama 1.1, Ollama 0.40), local CPU model.
+    # num_ctx: Ollama's default context is smaller than a segment's evidence
+    #   digest and it truncates the prompt silently; 8192 fits the largest
+    #   digest (~4.5k tokens) plus output on an 8 GB machine.
+    # reasoning: false -> Ollama `think: false`. Thinking output slows a CPU
+    #   model a lot and can break JSON parsing.
+    # temperature 0 + seed: repeatable on the same machine and build.
+    ollama:
+      num_ctx: 8192
+      num_predict: 2048
+      temperature: 0
+      seed: 42
+      reasoning: false
+  # `json_schema` = the provider's native structured-output mode. Forced tool
+  # calling ("function_calling") is rejected by Claude Opus 5.5 / Sonnet 5.5.
+  structured_output_method: json_schema
+
+validation:
+  # Retries after the first attempt, each feeding the validation errors back.
+  max_retries: 2
+
+review:
+  # Reject-with-comment loops back to redesign at most this many times; the
+  # next rejection finalises the run as "rejected".
+  max_revision_loops: 2
+
+# USD per million tokens. Anthropic list prices cached 2026-10-06; verify
+# against the provider's pricing page before quoting a cost in the thesis.
+# Cache writes are 1.25x input (5-minute TTL). A model missing here is logged
+# with cost "unknown" rather than a guessed price.
+pricing_usd_per_mtok:
+  claude-opus-5-5: {input: 4.00, output: 20.00, cache_read: 0.20, cache_write: 5.00}
+  claude-sonnet-5-5: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write: 2.50}
+  claude-sonnet-5: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write: 2.50}
+  claude-haiku-5-5: {input: 0.10, output: 0.50, cache_read: 0.01, cache_write: 0.125}

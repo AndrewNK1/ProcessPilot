@@ -1,0 +1,86 @@
+# ---------------------------------------------------------------------------
+# Domain knowledge: purchase-to-pay (P2P).
+#
+# General P2P practice the agent may use to interpret evidence. These are NOT
+# findings from the log: they carry no numbers and cannot be cited as
+# evidence. The agent may reference them by id (`domain_fact_ids`) so a
+# reader can see which part of a claim came from domain knowledge rather than
+# from the data.
+#
+# Selected per dataset preset via `domain_knowledge: <file stem>`; another
+# dataset supplies its own file. Keep this list short (<= 15) so it stays
+# reviewable.
+# ---------------------------------------------------------------------------
+version: 1
+domain: purchase-to-pay
+
+facts:
+  - id: D-01
+    statement: >-
+      A three-way match compares purchase order, goods receipt and invoice
+      before payment is released; a two-way match compares only purchase
+      order and invoice, so no goods receipt is expected.
+  - id: D-02
+    statement: >-
+      An invoice that arrives before the goods receipt cannot be matched yet
+      and typically waits (is blocked) until the goods receipt is recorded.
+  - id: D-03
+    statement: >-
+      Long waits before invoice clearing (payment) often reflect agreed
+      payment terms rather than inefficiency; clearing earlier than the due
+      date gives away working capital.
+  - id: D-04
+    statement: >-
+      Invoice clearing commonly happens in scheduled payment runs, so waits
+      into the clearing step partly reflect the run calendar.
+  - id: D-05
+    statement: >-
+      Steps performed by the vendor (e.g. creating the invoice) are outside
+      the buying organisation's direct control; waits before them depend on
+      supplier behaviour and contracts.
+  - id: D-06
+    statement: >-
+      Changing a purchase order after approval (price, quantity, approval
+      changes) often triggers re-approval and can cause invoice mismatches
+      that block payment.
+  - id: D-07
+    statement: >-
+      Price or quantity differences between invoice and purchase order or
+      goods receipt lead to payment blocks that must be resolved before
+      clearing.
+  - id: D-08
+    statement: >-
+      Segregation of duties requires that ordering, receiving, invoice
+      verification and payment are not all performed by the same person;
+      merging these tasks can violate internal controls.
+  - id: D-09
+    statement: >-
+      Evaluated receipt settlement (self-billing) lets the buyer generate the
+      invoice from goods-receipt data, removing the wait for a vendor invoice;
+      it requires supplier agreement.
+  - id: D-10
+    statement: >-
+      Electronic invoicing (e-invoice/EDI) reduces invoice transfer and manual
+      data-entry time compared with paper or PDF invoices.
+  - id: D-11
+    statement: >-
+      In consignment, stock remains the supplier's property until withdrawn,
+      and invoicing happens through periodic settlement outside the
+      individual order-item flow.
+  - id: D-12
+    statement: >-
+      Recording a goods receipt documents a physical delivery; the recording
+      can be simplified or automated, but the delivery itself cannot be
+      removed for physical goods.
+  - id: D-13
+    statement: >-
+      A vendor debit memo (credit note) corrects an invoice amount and
+      normally precedes the final clearing of that invoice.
+  - id: D-14
+    statement: >-
+      Deleting or cancelling a purchase order item is a legitimate outcome
+      (e.g. a cancelled need), not necessarily a process failure.
+  - id: D-15
+    statement: >-
+      Cases still open when an event log is extracted lack their final steps;
+      missing activities in such cases are not evidence of a breakdown.

@@ -83,10 +83,10 @@ def mine_segment(
     return SegmentMiningResult(segment=segment, evidence=evidence, dfg=dfg, bpmn=bpmn)
 
 
-def library_versions() -> dict[str, str]:
+def library_versions(packages: tuple[str, ...] = _VERSIONED_PACKAGES) -> dict[str, str]:
     """Installed versions of the packages that determine every number."""
     versions = {"python": platform.python_version()}
-    for name in _VERSIONED_PACKAGES:
+    for name in packages:
         try:
             versions[name] = version(name)
         except PackageNotFoundError:

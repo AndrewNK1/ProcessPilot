@@ -79,7 +79,12 @@ discovery:
   dfg_min_edge_frequency_share: 0.01
 
 analysis:
-  top_n_bottlenecks: 10
+  # Raised 10 -> 15 before Phase 3 (user decision, 2026-10-19): with 10, the
+  # listed bottlenecks covered only 75.1% of total transition wait in
+  # "3-way match, invoice after GR" (96.7 / 87.6 / 95.6% elsewhere); 15 is the
+  # smallest N reaching >=80% in every segment. Coverage = sum over listed
+  # edges of mean wait x frequency / the same sum over all DF edges.
+  top_n_bottlenecks: 15
   top_n_variants: 10
   top_n_rework: 10
   top_n_resources: 15
@@ -188,6 +193,10 @@ conformance_rules:
       - "3-way match, invoice before GR"
     # checked: missing in 643 / 15,182 (after GR) and 14,536 / 221,010
     # (before GR); same open-case caveat as R-03.
+
+# --- agent inputs (Phase 3) -----------------------------------------------
+# Domain facts the agent may use to interpret evidence: configs/domain/<name>.yaml.
+domain_knowledge: p2p
 
 # --- redesign constraints -------------------------------------------------
 # Machine-readable subset of the analyst's constraints, enforced by
