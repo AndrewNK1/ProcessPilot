@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-built reference model for tests: start -> A -> B -> C -> end.
+     Strict sequence, no gateways, so every replay outcome on mining_log can be
+     worked out by hand (see test_mining_reference.py). No diagram section:
+     conformance needs the process structure only. -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://processpilot.test/reference">
+	<bpmn:process id="abc_reference" isExecutable="false">
+		<bpmn:startEvent id="start" name="start">
+			<bpmn:outgoing>f_start_a</bpmn:outgoing>
+		</bpmn:startEvent>
+		<bpmn:task id="task_a" name="A">
+			<bpmn:incoming>f_start_a</bpmn:incoming>
+			<bpmn:outgoing>f_a_b</bpmn:outgoing>
+		</bpmn:task>
+		<bpmn:task id="task_b" name="B">
+			<bpmn:incoming>f_a_b</bpmn:incoming>
+			<bpmn:outgoing>f_b_c</bpmn:outgoing>
+		</bpmn:task>
+		<bpmn:task id="task_c" name="C">
+			<bpmn:incoming>f_b_c</bpmn:incoming>
+			<bpmn:outgoing>f_c_end</bpmn:outgoing>
+		</bpmn:task>
+		<bpmn:endEvent id="end" name="end">
+			<bpmn:incoming>f_c_end</bpmn:incoming>
+		</bpmn:endEvent>
+		<bpmn:sequenceFlow id="f_start_a" sourceRef="start" targetRef="task_a"/>
+		<bpmn:sequenceFlow id="f_a_b" sourceRef="task_a" targetRef="task_b"/>
+		<bpmn:sequenceFlow id="f_b_c" sourceRef="task_b" targetRef="task_c"/>
+		<bpmn:sequenceFlow id="f_c_end" sourceRef="task_c" targetRef="end"/>
+	</bpmn:process>
+</bpmn:definitions>

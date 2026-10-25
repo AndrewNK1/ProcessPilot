@@ -14,8 +14,10 @@ Persisted as JSON next to the run's other artefacts; the query methods on
 
 ID scheme: ``<PREFIX>-<rank:02d>-<segment-slug>``; conformance items use the
 rule id instead of a rank (``CF-R-02-<slug>``) so a rule keeps its ID when
-other rules are added. Prefixes: BN bottleneck, VA variant, RW rework,
-RS resource workload, HO handover, CF conformance, KPI segment KPIs.
+other rules are added. Prefixes: BN bottleneck, AW wait before an activity,
+VA variant, RW rework, RS resource workload, HO handover, CF conformance rule,
+CM conformance to the reference model (``CM-00`` = overall result or "not
+performed", ``CM-01..`` = ranked deviations), KPI segment KPIs.
 """
 
 from __future__ import annotations
@@ -27,14 +29,18 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from processpilot.mining.activities import ActivityWait
 from processpilot.mining.bottlenecks import Bottleneck
 from processpilot.mining.conformance import ConformanceResult
 from processpilot.mining.kpis import SegmentKPIs
+from processpilot.mining.reference import ReferenceConformance
 from processpilot.mining.resources import ResourceAnalysis
 from processpilot.mining.rework import ReworkItem
 from processpilot.mining.variants import VariantSummary
 
-EvidenceType = Literal["bottleneck", "variant", "rework", "resource", "conformance", "kpi"]
+EvidenceType = Literal[
+    "bottleneck", "activity", "variant", "rework", "resource", "conformance", "kpi"
+]
 
 _SECONDS_PER_MINUTE = 60
 _SECONDS_PER_HOUR = 3600
@@ -140,6 +146,8 @@ def build_segment_evidence(
     rework: list[ReworkItem],
     resources: ResourceAnalysis,
     conformance: list[ConformanceResult],
+    activity_waits: list[ActivityWait],
+    reference: ReferenceConformance,
 ) -> EvidenceStore:
     """Turn one segment's mining results into evidence items (pure)."""
     slug = segment_slug(segment)
@@ -155,7 +163,7 @@ def build_segment_evidence(
                 f"events ({kpis.collapsed_event_count:,} same-instant repeats collapsed); "
                 f"median case throughput is {format_duration(kpis.median_throughput_seconds)} "
                 f"(mean {format_duration(kpis.mean_throughput_seconds)}, "
-                f"P90 {format_duration(kpis.p90_throughput_seconds)})."
+                f"P90 {format_duration(kpis.p90_throughput_seconds)})." + _filter_note(kpis)
             ),
             metrics=kpis.model_dump(),
         )
@@ -177,6 +185,27 @@ def build_segment_evidence(
                 ),
                 metrics={**e.model_dump(), "impact_score": b.impact_score, "rank": b.rank},
                 refs=["dfg.json", kpi_id],
+            )
+        )
+
+    for w in activity_waits:
+        into = [bn_id for (_, target), bn_id in bn_ids.items() if target == w.activity]
+        items.append(
+            EvidenceItem(
+                id=f"AW-{w.rank:02d}-{slug}",
+                segment=segment,
+                type="activity",
+                summary=(
+                    f"Cases wait a median {format_duration(w.median_wait_seconds)} before "
+                    f"'{w.activity}' (time since the previous event; mean "
+                    f"{format_duration(w.mean_wait_seconds)}, P90 "
+                    f"{format_duration(w.p90_wait_seconds)}) over {w.occurrences:,} occurrences "
+                    f"in {_pct(w.case_share)} of cases; most often preceded by "
+                    f"'{w.top_predecessor}' ({_pct(w.top_predecessor_share)} of occurrences); "
+                    f"activity-wait rank {w.rank}."
+                ),
+                metrics=w.model_dump(),
+                refs=["activity_waits.json", kpi_id, *into],
             )
         )
 
@@ -237,7 +266,97 @@ def build_segment_evidence(
                 metrics=c.model_dump(),
             )
         )
+    items.extend(_reference_evidence(segment, slug, reference))
     return EvidenceStore(items=items)
+
+
+def _filter_note(kpis: SegmentKPIs) -> str:
+    f = kpis.variant_filter
+    if f is None:
+        return ""
+    scope = (
+        "every number in this segment"
+        if f.apply_to == "all"
+        else "the as-is model only (all other numbers use every case)"
+    )
+    return (
+        f" A variant filter ({f.mode} {f.value:g}) kept {f.variant_count_after:,} of "
+        f"{f.variant_count_before:,} variants, covering {_pct(f.kept_case_share)} of cases; "
+        f"it applies to {scope}."
+    )
+
+
+def _reference_evidence(segment: str, slug: str, ref: ReferenceConformance) -> list[EvidenceItem]:
+    overall_id = f"CM-00-{slug}"
+    if not ref.available:
+        return [
+            EvidenceItem(
+                id=overall_id,
+                segment=segment,
+                type="conformance",
+                summary=(
+                    "Conformance against a reference process model was not performed: "
+                    f"{ref.skipped_reason}. Absence of model deviations is NOT evidence that "
+                    "the segment follows its intended process."
+                ),
+                metrics={"available": False, "skipped_reason": ref.skipped_reason},
+            )
+        ]
+    completed = (
+        "no case-completion definition is configured"
+        if ref.completed_evaluated_cases is None
+        else (
+            f"{ref.completed_conforming_cases:,} of {ref.completed_evaluated_cases:,} "
+            f"({_pct(ref.completed_conforming_share)})"
+        )
+    )
+    unmodelled = (
+        f" {len(ref.unmodelled_activities)} observed activities are not in the model "
+        f"({ref.cases_with_unmodelled_activities:,} cases)."
+        if ref.unmodelled_activities
+        else ""
+    )
+    unobserved = (
+        f" {len(ref.unobserved_model_activities)} model activities never occur."
+        if ref.unobserved_model_activities
+        else ""
+    )
+    items = [
+        EvidenceItem(
+            id=overall_id,
+            segment=segment,
+            type="conformance",
+            summary=(
+                f"Against reference model '{ref.model_name}' ({ref.method}), "
+                f"{ref.conforming_cases:,} of {ref.evaluated_cases:,} cases "
+                f"({_pct(ref.conforming_share)}) conform; among completed cases: {completed}. "
+                f"Replay fitness is {ref.replay_fitness:.3f}; "
+                f"{ref.cases_unfit_without_flagged_activity:,} non-conforming cases only stop "
+                f"before the model's end (often still running).{unmodelled}{unobserved}"
+            ),
+            metrics=ref.model_dump(exclude={"deviations"}),
+        )
+    ]
+    for d in ref.deviations:
+        what = (
+            "is executed where the reference model does not allow it"
+            if d.kind == "executed_when_not_allowed"
+            else "occurs but is not part of the reference model"
+        )
+        items.append(
+            EvidenceItem(
+                id=f"CM-{d.rank:02d}-{slug}",
+                segment=segment,
+                type="conformance",
+                summary=(
+                    f"'{d.activity}' {what} in {_pct(d.case_share)} of cases "
+                    f"({d.case_count:,}); model-deviation rank {d.rank}."
+                ),
+                metrics={**d.model_dump(), "model_name": ref.model_name},
+                refs=[overall_id],
+            )
+        )
+    return items
 
 
 def _resource_evidence(

@@ -10,6 +10,7 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel
 
+from processpilot.mining.filtering import VariantFilterReport
 from processpilot.mining.prepare import case_throughput_seconds
 
 
@@ -26,12 +27,21 @@ class SegmentKPIs(BaseModel):
     p90_throughput_seconds: float
     first_timestamp: str
     last_timestamp: str
+    # Set when a variant filter was configured, whatever it was applied to,
+    # so a filtered model or filtered numbers can always be told apart.
+    variant_filter: VariantFilterReport | None = None
 
 
-def compute_kpis(mining_df: pd.DataFrame, raw_event_count: int, collapsed: int) -> SegmentKPIs:
+def compute_kpis(
+    mining_df: pd.DataFrame,
+    raw_event_count: int,
+    collapsed: int,
+    variant_filter: VariantFilterReport | None = None,
+) -> SegmentKPIs:
     """KPIs on the mining view; ``raw_event_count``/``collapsed`` record what changed."""
     throughput = case_throughput_seconds(mining_df)
     return SegmentKPIs(
+        variant_filter=variant_filter,
         case_count=int(mining_df["case_id"].nunique()),
         event_count=len(mining_df),
         raw_event_count=raw_event_count,

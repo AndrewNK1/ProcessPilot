@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 ConformanceRuleType = Literal["activity_a_before_activity_b", "activity_must_occur"]
 
@@ -32,7 +32,61 @@ class AnalysisSettings(BaseModel):
     top_n_rework: int = Field(gt=0)
     top_n_resources: int = Field(gt=0)
     top_n_handovers: int = Field(gt=0)
+    top_n_activity_waits: int = Field(gt=0)
+    top_n_model_deviations: int = Field(gt=0)
     max_example_cases: int = Field(default=5, gt=0)
+
+
+VariantFilterMode = Literal["none", "top_k", "coverage", "min_case_share"]
+
+
+class VariantFilterSettings(BaseModel):
+    """Which variants to keep, and for which part of the analysis.
+
+    WHY ``apply_to`` defaults to ``discovery``: filtering exists to make the
+    as-is model readable. Applied to everything, it would also hide rare cases
+    from the bottleneck, rework and conformance findings -- exactly the cases
+    an analyst may need to see -- so that is an explicit opt-in.
+
+    Modes: ``top_k`` keeps the ``value`` most frequent variants; ``coverage``
+    keeps the most frequent variants until they cover ``value`` (0-1] of
+    cases; ``min_case_share`` keeps variants followed by at least ``value`` of
+    cases. Ties follow the variant ranking (case count, then sequence).
+    """
+
+    mode: VariantFilterMode = "none"
+    value: float | None = None
+    apply_to: Literal["discovery", "all"] = "discovery"
+
+    @model_validator(mode="after")
+    def _value_fits_mode(self) -> VariantFilterSettings:
+        if self.mode == "none":
+            if self.value is not None:
+                raise ValueError("variant filter mode 'none' takes no value")
+            return self
+        if self.value is None:
+            raise ValueError(f"variant filter mode {self.mode!r} needs a value")
+        if self.mode == "top_k" and (self.value < 1 or not float(self.value).is_integer()):
+            raise ValueError("top_k needs a whole number >= 1")
+        if self.mode in ("coverage", "min_case_share") and not 0 < self.value <= 1:
+            raise ValueError(f"{self.mode} needs a share in (0, 1]")
+        return self
+
+
+class ReferenceModelSettings(BaseModel):
+    """Reference (to-be-followed) BPMN models, as paths relative to the project root.
+
+    WHY optional and per segment: a public log rarely ships with its intended
+    process, and segments of one log follow different processes. When none is
+    configured, the evidence says so instead of staying silent.
+    """
+
+    default: str | None = None
+    per_segment: dict[str, str | None] = Field(default_factory=dict)
+
+    def path_for(self, segment: str) -> str | None:
+        """Segment-specific path (``None`` disables it), else the default."""
+        return self.per_segment.get(segment, self.default)
 
 
 class PreprocessingSettings(BaseModel):
@@ -83,6 +137,8 @@ class MiningSettings(BaseModel):
     preprocessing: PreprocessingSettings = Field(default_factory=PreprocessingSettings)
     case_completion: CaseCompletionSettings = Field(default_factory=CaseCompletionSettings)
     conformance_rules: list[ConformanceRule] = Field(default_factory=list)
+    variant_filter: VariantFilterSettings = Field(default_factory=VariantFilterSettings)
+    reference_models: ReferenceModelSettings = Field(default_factory=ReferenceModelSettings)
 
     @classmethod
     def from_preset(cls, preset: dict[str, Any]) -> MiningSettings:
@@ -93,4 +149,6 @@ class MiningSettings(BaseModel):
             preprocessing=preset.get("preprocessing") or {},
             case_completion=preset.get("case_completion") or {},
             conformance_rules=preset.get("conformance_rules") or [],
+            variant_filter=preset.get("variant_filter") or {},
+            reference_models=preset.get("reference_models") or {},
         )

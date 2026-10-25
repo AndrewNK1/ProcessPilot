@@ -19,7 +19,9 @@ from processpilot.config import load_config_yaml
 class Applicability(BaseModel):
     """One evidence signal that makes a heuristic worth considering."""
 
-    evidence_type: Literal["bottleneck", "variant", "rework", "resource", "conformance", "kpi"]
+    evidence_type: Literal[
+        "bottleneck", "activity", "variant", "rework", "resource", "conformance", "kpi"
+    ]
     signal: str
 
 

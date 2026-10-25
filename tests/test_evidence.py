@@ -40,6 +40,8 @@ def test_evidence_ids_follow_the_scheme(store: EvidenceStore) -> None:
         "BN-02-all",
         "BN-03-all",
         "BN-04-all",
+        "AW-01-all",
+        "AW-02-all",
         "VA-01-all",
         "VA-02-all",
         "VA-03-all",
@@ -56,6 +58,7 @@ def test_evidence_ids_follow_the_scheme(store: EvidenceStore) -> None:
         "CF-R-2-all",
         "CF-R-3-all",
         "CF-R-4-all",
+        "CM-00-all",
     ]
 
 
@@ -142,7 +145,13 @@ def test_write_run_layout_and_manifest(
     merged = write_run(results, run_dir, mining_settings, {"type": "test"})
 
     for slug in ("group-a", "b"):
-        for name in ("as_is.bpmn", "dfg.json", "dfg_view.json", "evidence.json"):
+        for name in (
+            "as_is.bpmn",
+            "dfg.json",
+            "dfg_view.json",
+            "activity_waits.json",
+            "evidence.json",
+        ):
             assert (run_dir / slug / name).is_file(), f"{slug}/{name} missing"
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["segments"] == {"B": "b", "Group A": "group-a"}

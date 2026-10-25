@@ -150,6 +150,8 @@ def mining_settings() -> MiningSettings:
                 "top_n_rework": 10,
                 "top_n_resources": 10,
                 "top_n_handovers": 10,
+                "top_n_activity_waits": 10,
+                "top_n_model_deviations": 10,
                 "max_example_cases": 5,
             },
             "case_completion": {"end_activities": ["C"]},

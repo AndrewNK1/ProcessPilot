@@ -21,12 +21,15 @@ from typing import Any
 
 import pandas as pd
 
+from processpilot.mining.activities import ActivityWaitSummary, compute_activity_waits
 from processpilot.mining.bottlenecks import rank_bottlenecks
 from processpilot.mining.conformance import check_rules
 from processpilot.mining.discovery import DFGResult, compute_dfg, discover_bpmn
 from processpilot.mining.evidence import EvidenceStore, build_segment_evidence, segment_slug
+from processpilot.mining.filtering import filter_variants
 from processpilot.mining.kpis import compute_kpis
 from processpilot.mining.prepare import collapse_same_instant_repeats
+from processpilot.mining.reference import check_reference_model, not_performed
 from processpilot.mining.resources import analyse_resources
 from processpilot.mining.rework import analyse_rework
 from processpilot.mining.settings import MiningSettings
@@ -42,27 +45,74 @@ class SegmentMiningResult:
     segment: str
     evidence: EvidenceStore
     dfg: DFGResult
+    activity_waits: ActivityWaitSummary
     bpmn: Any | None
 
 
 def mine_segment(
-    raw_df: pd.DataFrame, segment: str, settings: MiningSettings, *, discover_model: bool = True
+    raw_df: pd.DataFrame,
+    segment: str,
+    settings: MiningSettings,
+    *,
+    discover_model: bool = True,
+    reference_model: Any | None = None,
 ) -> SegmentMiningResult:
     """Run every analysis on one segment's canonical log. No I/O.
 
     ``discover_model=False`` skips the inductive miner, which is the slow step
-    and irrelevant to most unit tests.
+    and irrelevant to most unit tests. ``reference_model`` is the pm4py BPMN
+    from ``reference.load_reference_model``; passing none while the settings
+    configure one for this segment raises, so a configured check can never be
+    skipped by forgetting to load it.
     """
+    configured = settings.reference_models.path_for(segment)
+    if configured is not None and reference_model is None:
+        raise ValueError(
+            f"a reference model is configured for segment {segment!r} ({configured}) but none "
+            "was passed; load it with reference.load_reference_model"
+        )
+
     if settings.preprocessing.collapse_same_instant_repeats:
         mining_df, collapsed = collapse_same_instant_repeats(raw_df)
     else:
         mining_df, collapsed = raw_df, 0
 
+    filter_report = None
+    discovery_df = mining_df
+    if settings.variant_filter.mode != "none":
+        discovery_df, filter_report = filter_variants(mining_df, settings.variant_filter)
+        if settings.variant_filter.apply_to == "all":
+            # Collapsing is per case, so the collapsed count of the kept cases
+            # is exactly their raw minus their collapsed event count.
+            raw_df = raw_df.loc[raw_df["case_id"].isin(discovery_df["case_id"])]
+            raw_df = raw_df.reset_index(drop=True)
+            mining_df = discovery_df
+            collapsed = len(raw_df) - len(mining_df)
+
     a = settings.analysis
+    completed_ends = settings.case_completion.end_activities_for(segment)
     dfg = compute_dfg(mining_df)
+    activity_waits = compute_activity_waits(mining_df)
+    reference = (
+        check_reference_model(
+            mining_df,
+            reference_model,
+            Path(configured).name,
+            completed_ends,
+            a.top_n_model_deviations,
+            a.max_example_cases,
+        )
+        if configured is not None
+        else not_performed("no reference model is configured for this segment")
+    )
     evidence = build_segment_evidence(
         segment=segment,
-        kpis=compute_kpis(mining_df, raw_event_count=len(raw_df), collapsed=collapsed),
+        kpis=compute_kpis(
+            mining_df,
+            raw_event_count=len(raw_df),
+            collapsed=collapsed,
+            variant_filter=filter_report,
+        ),
         bottlenecks=rank_bottlenecks(dfg, a.top_n_bottlenecks),
         variants=analyse_variants(mining_df, a.top_n_variants, a.max_example_cases),
         rework=analyse_rework(mining_df, a.top_n_rework, a.max_example_cases),
@@ -71,16 +121,20 @@ def mine_segment(
             mining_df,
             segment,
             settings.conformance_rules,
-            settings.case_completion.end_activities_for(segment),
+            completed_ends,
             a.max_example_cases,
         ),
+        activity_waits=activity_waits.activities[: a.top_n_activity_waits],
+        reference=reference,
     )
     bpmn = (
-        discover_bpmn(mining_df, settings.discovery.inductive_miner_noise_threshold)
+        discover_bpmn(discovery_df, settings.discovery.inductive_miner_noise_threshold)
         if discover_model
         else None
     )
-    return SegmentMiningResult(segment=segment, evidence=evidence, dfg=dfg, bpmn=bpmn)
+    return SegmentMiningResult(
+        segment=segment, evidence=evidence, dfg=dfg, activity_waits=activity_waits, bpmn=bpmn
+    )
 
 
 def library_versions(packages: tuple[str, ...] = _VERSIONED_PACKAGES) -> dict[str, str]:
@@ -129,6 +183,7 @@ def write_run(
         seg_dir.mkdir(parents=True, exist_ok=True)
         view, hidden = result.dfg.filtered(settings.discovery.dfg_min_edge_frequency_share)
         _write_json(seg_dir / "dfg.json", result.dfg.model_dump())
+        _write_json(seg_dir / "activity_waits.json", result.activity_waits.model_dump())
         _write_json(
             seg_dir / "dfg_view.json",
             {**view.model_dump(), "hidden_edge_count": hidden},

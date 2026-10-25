@@ -68,3 +68,24 @@ def case_traces(df: pd.DataFrame) -> pd.Series:
 def case_end_activities(df: pd.DataFrame) -> pd.Series:
     """Last activity per case, indexed by ``case_id``."""
     return df.groupby("case_id", sort=True)["activity"].last()
+
+
+# A unit-separator-joined string is a hashable, sortable stand-in for a trace
+# tuple; activity names never contain U+001F.
+VARIANT_SEP = "\x1f"
+
+
+def case_variant_keys(df: pd.DataFrame) -> pd.Series:
+    """Variant key (activities joined by ``VARIANT_SEP``) per case, indexed by ``case_id``."""
+    return case_traces(df).map(VARIANT_SEP.join)
+
+
+def ranked_variant_counts(keys: pd.Series) -> pd.Series:
+    """Case count per variant key, most frequent first, ties by key.
+
+    WHY one shared ordering: the variant filter and the variant evidence must
+    agree on what "the top k variants" are, including at ties.
+    """
+    counts = keys.value_counts().rename_axis("key").reset_index(name="size")
+    counts = counts.sort_values(["size", "key"], ascending=[False, True], kind="stable")
+    return counts.set_index("key")["size"]

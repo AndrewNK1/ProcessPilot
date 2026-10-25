@@ -89,7 +89,29 @@ analysis:
   top_n_rework: 10
   top_n_resources: 15
   top_n_handovers: 10
+  # Waiting time before each activity (AW-* evidence). The full table for
+  # every activity is always written to activity_waits.json; this only caps
+  # what the agent reads. 10 of 42 activities keeps the digest small.
+  top_n_activity_waits: 10
+  # Ranked deviations from the reference model (CM-01..); unused while no
+  # reference model is configured.
+  top_n_model_deviations: 10
   max_example_cases: 5
+
+# --- variant filter (mining/filtering.py) ----------------------------------
+# Off for BPI 2019, so the evidence stays comparable with earlier runs; the
+# inductive miner's noise threshold already keeps the as-is model readable.
+# Example: {mode: coverage, value: 0.8, apply_to: discovery} discovers the
+# model from the most frequent variants covering 80% of cases.
+variant_filter:
+  mode: none
+
+# --- reference (intended) process models ------------------------------------
+# BPI 2019 ships without a reference model, so none is configured and every
+# segment records CM-00 "not performed". Paths are relative to the project
+# root, e.g. default: configs/reference/p2p.bpmn, with per_segment overrides.
+reference_models:
+  default: null
 
 # --- mining-time view of the log (Phase 2) ---------------------------------
 preprocessing:

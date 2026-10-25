@@ -14,9 +14,12 @@ from __future__ import annotations
 import pandas as pd
 from pydantic import BaseModel
 
-from processpilot.mining.prepare import case_throughput_seconds, case_traces
-
-_SEP = "\x1f"
+from processpilot.mining.prepare import (
+    VARIANT_SEP,
+    case_throughput_seconds,
+    case_variant_keys,
+    ranked_variant_counts,
+)
 
 
 class Variant(BaseModel):
@@ -42,15 +45,12 @@ class VariantSummary(BaseModel):
 
 def analyse_variants(df: pd.DataFrame, top_n: int, max_example_cases: int) -> VariantSummary:
     """Rank variants by case count; ties broken by the activity sequence itself."""
-    traces = case_traces(df)
-    throughput = case_throughput_seconds(df)
-    # A unit-separator-joined string is a hashable, sortable stand-in for the
-    # tuple; activity names never contain U+001F.
-    table = pd.DataFrame({"key": traces.map(lambda t: _SEP.join(t)), "throughput": throughput})
+    table = pd.DataFrame({"key": case_variant_keys(df), "throughput": case_throughput_seconds(df)})
     case_count = len(table)
 
+    order = ranked_variant_counts(table["key"]).index
     stats = table.groupby("key", sort=False)["throughput"].agg(["size", "mean", "median"])
-    stats = stats.reset_index().sort_values(["size", "key"], ascending=[False, True], kind="stable")
+    stats = stats.reindex(order).reset_index()
 
     variants: list[Variant] = []
     for rank, row in enumerate(stats.head(top_n).itertuples(index=False), start=1):
@@ -58,7 +58,7 @@ def analyse_variants(df: pd.DataFrame, top_n: int, max_example_cases: int) -> Va
         variants.append(
             Variant(
                 rank=rank,
-                activities=row.key.split(_SEP),
+                activities=row.key.split(VARIANT_SEP),
                 case_count=int(row.size),
                 case_share=float(row.size) / case_count,
                 mean_throughput_seconds=float(row.mean),

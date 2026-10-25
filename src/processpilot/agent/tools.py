@@ -45,6 +45,10 @@ class EvidenceTools:
         """The ``n`` highest-impact bottlenecks (all listed ones if ``None``)."""
         return self._of_type("bottleneck")[:n]
 
+    def get_activity_waits(self, n: int | None = None) -> list[EvidenceItem]:
+        """The ``n`` activities with the highest-impact wait before them."""
+        return self._of_type("activity")[:n]
+
     def get_variants(self, n: int | None = None) -> list[EvidenceItem]:
         """The ``n`` most frequent variants (all listed ones if ``None``)."""
         return self._of_type("variant")[:n]

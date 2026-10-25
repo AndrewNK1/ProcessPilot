@@ -49,12 +49,13 @@ Use activity names exactly as written in the activity list."""
 _TYPE_HEADINGS: tuple[tuple[str, str, str], ...] = (
     ("kpi", "Segment KPIs", ""),
     ("bottleneck", "Bottlenecks (waiting time per transition, ranked by impact)", ""),
+    ("activity", "Waiting time before each activity (ranked by impact)", ""),
     ("variant", "Variants (most frequent paths)", ""),
     ("rework", "Rework (repeated activities)", "No rework items were found in this segment."),
     ("resource", "Resources and handovers", ""),
     (
         "conformance",
-        "Conformance rules",
+        "Conformance (rules and reference model)",
         "No configured conformance rule applies to this segment. Absence of findings "
         "here is NOT evidence that the segment is compliant.",
     ),
@@ -76,6 +77,7 @@ def render_digest(tools: EvidenceTools) -> str:
     by_type = {
         "kpi": tools.get_kpis(),
         "bottleneck": tools.get_top_bottlenecks(),
+        "activity": tools.get_activity_waits(),
         "variant": tools.get_variants(),
         "rework": tools.get_rework(),
         "resource": tools.get_resources(),
