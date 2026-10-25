@@ -10,11 +10,13 @@ import pandas as pd
 import pytest
 
 from processpilot.mining.bottlenecks import rank_bottlenecks
-from processpilot.mining.discovery import DFGEdge, DFGResult, compute_dfg, discover_bpmn
+from processpilot.mining.discovery import DFGEdge, DFGResult, compute_dfg
 from processpilot.mining.kpis import compute_kpis
 from processpilot.mining.prepare import (
+    case_throughput_seconds,
     collapse_same_instant_repeats,
     directly_follows_pairs,
+    event_waits,
 )
 from processpilot.mining.rework import analyse_rework
 from processpilot.mining.variants import analyse_variants
@@ -147,7 +149,22 @@ def test_kpis_match_answer_key(view: pd.DataFrame) -> None:
     assert kpis.p90_throughput_seconds == pytest.approx(8 * H)
 
 
-def test_inductive_miner_produces_bpmn_with_every_activity(view: pd.DataFrame) -> None:
-    bpmn = discover_bpmn(view, noise_threshold=0.0)
-    labels = {n.get_name() for n in bpmn.get_nodes()}
-    assert {"A", "B", "C"} <= labels
+def test_inductive_miner_tree_contains_every_activity_once(view: pd.DataFrame) -> None:
+    from processpilot.process_tree import discover_tree, labels
+
+    tree = discover_tree(view, noise_threshold=0.0)
+    assert sorted(labels(tree)) == ["A", "B", "C"]
+
+
+def test_event_waits_sum_to_case_throughput(view: pd.DataFrame) -> None:
+    waits = event_waits(view)
+    assert list(waits.columns) == ["case_id", "activity", "wait_seconds"]
+    first = ~waits["case_id"].duplicated()
+    assert waits.loc[first, "wait_seconds"].isna().all()
+    summed = waits.groupby("case_id")["wait_seconds"].sum()
+    pd.testing.assert_series_equal(
+        summed, case_throughput_seconds(view), check_names=False, check_index_type=False
+    )
+    # c3: A(0) B(1) B(5) C(6) -> waits before B, B, C are 1h, 4h, 1h.
+    c3 = waits.loc[waits["case_id"] == "c3", "wait_seconds"].tolist()[1:]
+    assert c3 == [1 * H, 4 * H, 1 * H]

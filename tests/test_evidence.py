@@ -147,12 +147,21 @@ def test_write_run_layout_and_manifest(
     for slug in ("group-a", "b"):
         for name in (
             "as_is.bpmn",
+            "as_is_tree.json",
+            "case_waits.parquet",
             "dfg.json",
             "dfg_view.json",
             "activity_waits.json",
             "evidence.json",
         ):
             assert (run_dir / slug / name).is_file(), f"{slug}/{name} missing"
+        # The PNG is drawn only when Graphviz is installed, and the manifest says which.
+        from processpilot.process_tree import graphviz_available
+
+        assert (run_dir / slug / "as_is.png").is_file() == graphviz_available()
+    # Waits written for the estimate sum to each case's throughput (group-a: c1-c3).
+    waits = pd.read_parquet(run_dir / "group-a" / "case_waits.parquet")
+    assert waits.groupby("case_id")["wait_seconds"].sum().tolist() == [3 * 3600, 4 * 3600, 6 * 3600]
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["segments"] == {"B": "b", "Group A": "group-a"}
     assert manifest["library_versions"]["pm4py"] != "not installed"

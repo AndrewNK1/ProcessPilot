@@ -18,9 +18,11 @@ and returns a partial state update.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, TypeVar
 
+import pandas as pd
 from langgraph.types import interrupt
 from pydantic import BaseModel, ValidationError
 
@@ -58,7 +60,12 @@ from processpilot.agent.validation import (
     validate_diagnosis,
     validate_redesign,
 )
-from processpilot.mining.run import library_versions
+from processpilot.mining.run import CASE_WAITS_FILE, library_versions
+from processpilot.process_tree import TreeNode
+from processpilot.redesign.bpmn_edit import apply_proposal, write_to_be
+from processpilot.redesign.operations import EditError
+from processpilot.redesign.simulate import estimate_impact
+from processpilot.redesign.soundness import check_soundness
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -74,13 +81,20 @@ _AGENT_PACKAGES = (
     "anthropic",
     "langchain-ollama",
     "ollama",
+    "pm4py",
+    "pulp",
 )
-_NOT_IMPLEMENTED = "not_implemented_phase4"
 
 
 @dataclass(frozen=True)
 class AgentContext:
-    """Everything a node needs that is not state: inputs, model, logger."""
+    """Everything a node needs that is not state: inputs, model, logger.
+
+    ``activities`` are the as-is model's (what an edit may name);
+    ``observed_activities`` are everything mining saw, including activities
+    the model left out as rare. ``segment_dir`` holds the mined artefacts the
+    redesign steps read (``as_is_tree.json``, ``case_waits.parquet``).
+    """
 
     run_id: str
     segment: str
@@ -91,6 +105,14 @@ class AgentContext:
     settings: AgentSettings
     llm: StructuredLLM
     logger: RunLogger
+    segment_dir: Path | None = None
+    as_is_tree: TreeNode | None = None
+    observed_activities: list[str] = field(default_factory=list)
+
+    @property
+    def unmodelled_activities(self) -> list[str]:
+        """Observed in the log but not part of the as-is model."""
+        return sorted(set(self.observed_activities) - set(self.activities))
 
     def validation_context(self, state: AgentState) -> ValidationContext:
         """Checks are bound to this segment and the run's constraints."""
@@ -101,6 +123,8 @@ class AgentContext:
             catalogue=self.catalogue,
             domain=self.domain,
             protected_activities=frozenset(state.constraints.protected_activities),
+            as_is_tree=self.as_is_tree,
+            observed_activities=frozenset(self.observed_activities),
         )
 
 
@@ -245,7 +269,11 @@ def diagnose(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
         ChatTurn(
             role="user",
             content=diagnose_prompt(
-                ctx.segment, ctx.activities, render_digest(ctx.tools), ctx.domain
+                ctx.segment,
+                ctx.activities,
+                render_digest(ctx.tools),
+                ctx.domain,
+                ctx.unmodelled_activities,
             ),
         ),
     ]
@@ -278,6 +306,7 @@ def redesign(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
                 state.constraints,
                 previous=state.proposals if revising else None,
                 analyst_comment=state.review_history[-1].comment if revising else None,
+                unmodelled=ctx.unmodelled_activities,
             ),
         ),
     ]
@@ -291,34 +320,98 @@ def redesign(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
     return {"proposals": proposals, "warnings": [*state.warnings, *warnings]}
 
 
+def _to_be_tree(state: AgentState, ctx: AgentContext, index: int) -> TreeNode:
+    """Re-derive a proposal's to-be tree (deterministic, so not stored in state)."""
+    assert state.proposals is not None and ctx.as_is_tree is not None
+    ops = state.proposals.proposals[index].edit_operations
+    to_be, _ = apply_proposal(
+        ctx.as_is_tree, ops, frozenset(state.constraints.protected_activities)
+    )
+    return to_be
+
+
 def apply_edits(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
-    """Pure code: write ``to_be.bpmn`` per proposal. STUB until Phase 4."""
+    """Pure code: apply each proposal to the as-is model, write its to-be BPMN + PNG.
+
+    Validation already trial-applied every proposal, so a failure here means
+    the as-is model is missing or changed; it is recorded per proposal rather
+    than raised, and ``validate`` skips that proposal.
+    """
     assert state.proposals is not None
-    results = [
-        EditResult(
-            proposal_index=i,
-            status=_NOT_IMPLEMENTED,
-            message="BPMN editing is implemented in Phase 4; proposal passed through unchanged.",
+    results: list[EditResult] = []
+    for i, proposal in enumerate(state.proposals.proposals):
+        if ctx.as_is_tree is None:
+            results.append(
+                EditResult(
+                    proposal_index=i,
+                    status="failed",
+                    message="no as-is model (as_is_tree.json) for this segment; re-run mining",
+                )
+            )
+            continue
+        try:
+            to_be, diff = apply_proposal(
+                ctx.as_is_tree,
+                proposal.edit_operations,
+                frozenset(state.constraints.protected_activities),
+            )
+        except EditError as exc:
+            results.append(EditResult(proposal_index=i, status="failed", message=str(exc)))
+            continue
+        stem = f"to_be_r{state.revision_count}_p{i + 1}"
+        bpmn_path, png_path = write_to_be(to_be, ctx.logger.directory, stem)
+        results.append(
+            EditResult(
+                proposal_index=i,
+                status="applied",
+                to_be_bpmn_path=str(bpmn_path),
+                to_be_png_path=str(png_path) if png_path else None,
+                diff=diff,
+            )
         )
-        for i in range(len(state.proposals.proposals))
-    ]
-    ctx.logger.event("node", node="apply_edits", status=_NOT_IMPLEMENTED)
+    ctx.logger.event(
+        "node", node="apply_edits", results=[r.model_dump(exclude={"diff"}) for r in results]
+    )
     return {"edit_results": results}
 
 
 def validate(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
-    """Pure code: soundness + replay ESTIMATE per proposal. STUB until Phase 4."""
+    """Pure code: soundness + replay ESTIMATE for every applied proposal."""
     assert state.proposals is not None
-    results = [
-        ProposalValidation(
-            proposal_index=i,
-            status=_NOT_IMPLEMENTED,
-            message="Soundness check and impact ESTIMATE are implemented in Phase 4.",
+    waits = _case_waits(ctx)
+    rs = ctx.settings.redesign
+    results: list[ProposalValidation] = []
+    for edit in state.edit_results:
+        i = edit.proposal_index
+        if edit.status != "applied":
+            results.append(
+                ProposalValidation(
+                    proposal_index=i, status="skipped", message="edits were not applied"
+                )
+            )
+            continue
+        soundness = check_soundness(_to_be_tree(state, ctx, i), rs.woflan_max_transitions)
+        estimate = (
+            estimate_impact(waits, state.proposals.proposals[i].edit_operations, rs.estimate)
+            if waits is not None
+            else None
         )
-        for i in range(len(state.proposals.proposals))
-    ]
-    ctx.logger.event("node", node="validate", status=_NOT_IMPLEMENTED)
+        results.append(
+            ProposalValidation(
+                proposal_index=i,
+                status="validated" if soundness.sound else "failed",
+                soundness=soundness,
+                estimate=estimate,
+                message=None if waits is not None else "no case_waits.parquet; no estimate",
+            )
+        )
+    ctx.logger.event("node", node="validate", results=[r.model_dump(mode="json") for r in results])
     return {"validation_results": results, "status": "awaiting_review"}
+
+
+def _case_waits(ctx: AgentContext) -> pd.DataFrame | None:
+    path = ctx.segment_dir / CASE_WAITS_FILE if ctx.segment_dir else None
+    return pd.read_parquet(path) if path is not None and path.is_file() else None
 
 
 def review_payload(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
@@ -330,6 +423,8 @@ def review_payload(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
         "max_revision_loops": ctx.settings.max_revision_loops,
         "diagnosis": state.diagnosis.model_dump() if state.diagnosis else None,
         "proposals": state.proposals.model_dump() if state.proposals else None,
+        "edit_results": [r.model_dump(mode="json") for r in state.edit_results],
+        "validation_results": [r.model_dump(mode="json") for r in state.validation_results],
         "warnings": [w.model_dump() for w in state.warnings],
         "expected_resume": {"decision": "approve | reject", "comment": "str | None"},
     }

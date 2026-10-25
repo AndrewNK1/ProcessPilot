@@ -47,6 +47,9 @@ from processpilot.agent.runlog import RunLogger
 from processpilot.agent.state import CHECKPOINT_TYPES, AgentState, Constraints, ReviewDecision
 from processpilot.agent.tools import EvidenceTools
 from processpilot.mining.evidence import EvidenceStore, segment_slug
+from processpilot.mining.run import AS_IS_TREE_FILE
+from processpilot.process_tree import TreeNode, labels
+from processpilot.redesign.bpmn_edit import load_tree
 
 CHECKPOINT_FILE = "checkpoints.sqlite"
 
@@ -102,17 +105,28 @@ def open_checkpointer(path: Path) -> tuple[SqliteSaver, sqlite3.Connection]:
 
 
 def segment_activities(run_dir: Path, segment: str) -> list[str]:
-    """Activities of a segment's as-is process, read from the mined ``dfg.json``.
+    """Every activity observed in a segment, read from the mined ``dfg.json``.
 
     WHY dfg.json rather than the log: the agent layer never opens event data.
     The DFG lists every activity that occurs (as an edge endpoint or as a
-    start/end activity), which is exactly the set an edit may refer to.
+    start/end activity).
     """
     dfg = json.loads((run_dir / segment_slug(segment) / "dfg.json").read_text(encoding="utf-8"))
     names = set(dfg["start_activities"]) | set(dfg["end_activities"])
     for e in dfg["edges"]:
         names.update((e["source"], e["target"]))
     return sorted(names)
+
+
+def load_as_is_tree(run_dir: Path, segment: str) -> TreeNode | None:
+    """The segment's mined process tree, or ``None`` for runs mined before Phase 4.
+
+    WHY the tree and not the DFG decides what may be edited: the inductive
+    miner can leave rare activities out of the model, and an edit can only
+    change what the model contains.
+    """
+    path = run_dir / segment_slug(segment) / AS_IS_TREE_FILE
+    return load_tree(path) if path.is_file() else None
 
 
 def model_id_from_env(settings: AgentSettings) -> str:
@@ -190,16 +204,21 @@ class AgentRunner:
 
     def _context(self, segment: str, agent_run_id: str) -> AgentContext:
         seg_dir = self.run_dir / segment_slug(segment)
+        observed = segment_activities(self.run_dir, segment)
+        tree = load_as_is_tree(self.run_dir, segment)
         return AgentContext(
             run_id=self.run_id,
             segment=segment,
             tools=EvidenceTools(self.store, segment),
-            activities=segment_activities(self.run_dir, segment),
+            activities=sorted(labels(tree)) if tree is not None else observed,
             catalogue=self.catalogue,
             domain=self.domain,
             settings=self.settings,
             llm=self.llm,
             logger=RunLogger(seg_dir / "agent" / agent_run_id),
+            segment_dir=seg_dir,
+            as_is_tree=tree,
+            observed_activities=observed,
         )
 
     def _graph(self, segment: str, agent_run_id: str) -> CompiledStateGraph:

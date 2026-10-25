@@ -21,7 +21,9 @@ from processpilot.agent.state import Constraints, Diagnosis, RedesignSet, Valida
 from processpilot.agent.tools import EvidenceTools
 from processpilot.mining.evidence import EvidenceItem
 
-PROMPT_VERSION = "p3-v1"
+# p3-v1: Phase 3. p4-v1: activity-wait evidence in the digest, add_check and
+# automate_activity, adjacency rule for parallelize/merge, unmodelled activities.
+PROMPT_VERSION = "p4-v1"
 
 SYSTEM_PROMPT = """\
 You are ProcessPilot, a process-analysis assistant for business analysts. You \
@@ -103,22 +105,36 @@ def _render_domain(domain: DomainKnowledge | None) -> str:
 
 
 def _render_context(
-    segment: str, activities: list[str], digest: str, domain: DomainKnowledge | None
+    segment: str,
+    activities: list[str],
+    digest: str,
+    domain: DomainKnowledge | None,
+    unmodelled: list[str] | None = None,
 ) -> str:
+    rare = (
+        "\n\nObserved in the log but too rare to be part of the as-is model (they may be "
+        f"discussed, but no edit operation may name them):\n{_render_activities(unmodelled)}"
+        if unmodelled
+        else ""
+    )
     return (
         f"Segment: {segment}\n\n"
-        f"## Activities in this segment's as-is process\n{_render_activities(activities)}\n\n"
+        f"## Activities in this segment's as-is model\n{_render_activities(activities)}{rare}\n\n"
         f"## Evidence\n{digest}\n\n"
         f"## Domain facts\n{_render_domain(domain)}"
     )
 
 
 def diagnose_prompt(
-    segment: str, activities: list[str], digest: str, domain: DomainKnowledge | None
+    segment: str,
+    activities: list[str],
+    digest: str,
+    domain: DomainKnowledge | None,
+    unmodelled: list[str] | None = None,
 ) -> str:
     """User message for the ``diagnose`` step."""
     return (
-        _render_context(segment, activities, digest, domain) + "\n\n## Task\n"
+        _render_context(segment, activities, digest, domain, unmodelled) + "\n\n## Task\n"
         "Diagnose the main root causes of long throughput times, waiting, rework or "
         "non-conformance in this segment. Return between 1 and 5 hypotheses, ranked "
         "with the most important first. For each hypothesis give the evidence IDs it "
@@ -140,14 +156,21 @@ def _render_heuristic(h: Heuristic) -> str:
 
 _OPERATIONS_HELP = """\
 - remove_activity(activity): delete an existing activity.
-- parallelize_activities(activities): run two or more existing, currently \
-sequential activities concurrently.
+- parallelize_activities(activities): run two or more existing activities \
+concurrently. They must be adjacent steps of one sequence in the as-is model \
+(no other step between them, none inside a choice, loop or parallel block).
 - reorder_activities(activity, after): move an existing activity so it directly \
-follows the existing activity `after`.
+follows the existing activity `after` (it then happens exactly when `after` does).
 - add_activity(name, after): insert a NEW activity `name` directly after the \
 existing activity `after`.
+- add_check(name, after): insert a NEW control or verification step `name` \
+directly after the existing activity `after`.
 - merge_activities(activities, merged_name): replace two or more existing \
-activities by one composite activity."""
+activities by one composite activity; same adjacency rule as parallelize.
+- automate_activity(activity): have the system perform an existing activity; it \
+stays in place.
+If an operation cannot be applied to the model, you will be told why and asked \
+to revise it."""
 
 
 def _render_constraints(constraints: Constraints) -> str:
@@ -156,7 +179,8 @@ def _render_constraints(constraints: Constraints) -> str:
     return (
         f"{text}\n"
         f"Protected activities (must not be removed, moved, merged or parallelized; they "
-        f"may be used as the `after` anchor of another operation): {protected}"
+        f"may be automated and may be used as the `after` anchor of another operation): "
+        f"{protected}"
     )
 
 
@@ -170,11 +194,12 @@ def redesign_prompt(
     constraints: Constraints,
     previous: RedesignSet | None = None,
     analyst_comment: str | None = None,
+    unmodelled: list[str] | None = None,
 ) -> str:
     """User message for the ``redesign`` step (also used for revisions)."""
     catalogue = "\n".join(_render_heuristic(h) for h in heuristics)
     parts = [
-        _render_context(segment, activities, digest, domain),
+        _render_context(segment, activities, digest, domain, unmodelled),
         f"## Diagnosis (from the previous step)\n{diagnosis.model_dump_json(indent=2)}",
         f"## Heuristic catalogue (select only from these)\n{catalogue}",
         f"## Edit operations (the only way to express a change)\n{_OPERATIONS_HELP}",

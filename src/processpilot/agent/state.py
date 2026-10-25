@@ -15,25 +15,36 @@ Two groups of models live here:
   ``agent/validation.py``.
 - **Graph state** (``AgentState``) and its bookkeeping records.
 
-The edit-operation vocabulary is final for Phase 4: ``redesign/bpmn_edit.py``
-will consume these models unchanged.
+The edit-operation vocabulary lives in ``redesign/operations.py``, which
+executes it; it is re-exported here because it is part of the LLM's schema.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from processpilot.redesign.operations import (  # noqa: F401 -- re-exported vocabulary
+    OPERATION_NAMES,
+    OPERATION_TYPES,
+    AddActivity,
+    AddCheck,
+    AutomateActivity,
+    EditOperation,
+    MergeActivities,
+    ModelDiff,
+    OperationName,
+    ParallelizeActivities,
+    RemoveActivity,
+    ReorderActivities,
+    existing_activities,
+    modified_activities,
+)
+from processpilot.redesign.simulate import ImpactEstimate
+from processpilot.redesign.soundness import SoundnessResult
+
 Confidence = Literal["low", "medium", "high"]
-OperationName = Literal[
-    "remove_activity",
-    "parallelize_activities",
-    "reorder_activities",
-    "add_activity",
-    "merge_activities",
-]
-OPERATION_NAMES: tuple[str, ...] = OperationName.__args__  # type: ignore[attr-defined]
 
 
 # --- LLM output: diagnosis ---------------------------------------------------
@@ -65,86 +76,11 @@ class Diagnosis(BaseModel):
 
 # --- LLM output: redesign ----------------------------------------------------
 #
-# Activity semantics, fixed now so Phase 4 can implement them:
-# - names in ``activity`` / ``activities`` / ``after`` must exist in the
-#   segment's as-is process;
-# - ``AddActivity.name`` must NOT exist yet; ``MergeActivities.merged_name``
-#   may be new or equal one of the merged activities.
-
-
-class RemoveActivity(BaseModel):
-    """Delete ``activity``; its predecessors connect to its successors."""
-
-    op: Literal["remove_activity"] = "remove_activity"
-    activity: str
-
-
-class ParallelizeActivities(BaseModel):
-    """Run ``activities`` (currently sequential) concurrently."""
-
-    op: Literal["parallelize_activities"] = "parallelize_activities"
-    activities: list[str] = Field(min_length=2)
-
-
-class ReorderActivities(BaseModel):
-    """Move ``activity`` so that it directly follows ``after``."""
-
-    op: Literal["reorder_activities"] = "reorder_activities"
-    activity: str
-    after: str
-
-
-class AddActivity(BaseModel):
-    """Insert a new activity ``name`` directly after the existing ``after``."""
-
-    op: Literal["add_activity"] = "add_activity"
-    name: str
-    after: str
-
-
-class MergeActivities(BaseModel):
-    """Replace ``activities`` with one composite activity ``merged_name``."""
-
-    op: Literal["merge_activities"] = "merge_activities"
-    activities: list[str] = Field(min_length=2)
-    merged_name: str
-
-
-EditOperation = Annotated[
-    RemoveActivity | ParallelizeActivities | ReorderActivities | AddActivity | MergeActivities,
-    Field(discriminator="op"),
-]
-
-
-def existing_activities(op: EditOperation) -> list[str]:
-    """Activities ``op`` refers to that must already exist in the as-is process."""
-    match op:
-        case RemoveActivity():
-            return [op.activity]
-        case ParallelizeActivities() | MergeActivities():
-            return list(op.activities)
-        case ReorderActivities():
-            return [op.activity, op.after]
-        case AddActivity():
-            return [op.after]
-    raise TypeError(f"unknown edit operation: {op!r}")
-
-
-def modified_activities(op: EditOperation) -> list[str]:
-    """Activities ``op`` removes, moves or rewrites.
-
-    WHY anchors are excluded: inserting a step *after* a protected activity
-    leaves it intact, so ``AddActivity.after`` and ``ReorderActivities.after``
-    do not count as touching it. Everything else does.
-    """
-    match op:
-        case RemoveActivity() | ReorderActivities():
-            return [op.activity]
-        case ParallelizeActivities() | MergeActivities():
-            return list(op.activities)
-        case AddActivity():
-            return []
-    raise TypeError(f"unknown edit operation: {op!r}")
+# The edit operations are defined in ``redesign/operations.py`` (the package
+# that executes them) and re-exported here: names in ``activity`` /
+# ``activities`` / ``after`` must exist in the segment's as-is model; ``name``
+# of ``add_activity``/``add_check`` must not exist yet; ``merged_name`` may be
+# new or equal one of the merged activities.
 
 
 class RedesignProposal(BaseModel):
@@ -199,6 +135,7 @@ class ValidationIssue(BaseModel):
         "unknown_activity",
         "activity_already_exists",
         "protected_activity",
+        "edit_not_applicable",
         "unsupported_number",
     ]
     message: str
@@ -222,15 +159,14 @@ class ReviewRecord(BaseModel):
     decided_at: str
 
 
-ProposalStatus = Literal["not_implemented_phase4", "applied", "failed"]
-
-
 class EditResult(BaseModel):
-    """Outcome of ``apply_edits`` for one proposal (Phase 4 fills the BPMN path)."""
+    """Outcome of ``apply_edits`` for one proposal."""
 
     proposal_index: int
-    status: ProposalStatus
+    status: Literal["applied", "failed"]
     to_be_bpmn_path: str | None = None
+    to_be_png_path: str | None = None
+    diff: ModelDiff | None = None
     message: str | None = None
 
 
@@ -238,9 +174,9 @@ class ProposalValidation(BaseModel):
     """Outcome of ``validate`` for one proposal. ``estimate`` is an ESTIMATE."""
 
     proposal_index: int
-    status: ProposalStatus
-    sound: bool | None = None
-    estimate: dict[str, float] | None = None
+    status: Literal["validated", "skipped", "failed"]
+    soundness: SoundnessResult | None = None
+    estimate: ImpactEstimate | None = None
     message: str | None = None
 
 
@@ -276,13 +212,12 @@ CHECKPOINT_TYPES: tuple[type, ...] = (
     Hypothesis,
     RedesignSet,
     RedesignProposal,
-    RemoveActivity,
-    ParallelizeActivities,
-    ReorderActivities,
-    AddActivity,
-    MergeActivities,
+    *OPERATION_TYPES,
     EditResult,
+    ModelDiff,
     ProposalValidation,
+    SoundnessResult,
+    ImpactEstimate,
     ReviewRecord,
     ValidationIssue,
 )

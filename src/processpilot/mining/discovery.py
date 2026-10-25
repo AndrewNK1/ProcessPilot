@@ -1,28 +1,25 @@
-"""As-is process discovery: BPMN model, DFG, and performance DFG.
+"""As-is process discovery: process tree (rendered as BPMN), DFG, performance DFG.
 
 WHY the inductive miner: it is the only mainstream discovery algorithm that
-guarantees a sound model, and ``apply_edits`` later needs a structurally valid
-BPMN to transform. The noise threshold is configurable because real logs like
-BPI 2019 produce an unreadable flower model at threshold 0.
+guarantees a sound model, and redesign edits that model. It yields a process
+tree (``process_tree.discover_tree``), which redesign edits and renders as
+BPMN with stable element ids. The noise threshold is configurable because real
+logs like BPI 2019 produce an unreadable flower model at threshold 0; note
+that it can also leave very rare activities out of the model (BPI 2019,
+2-way match: 8 of 11 activities at 0.2), so the model's activities -- not the
+DFG's -- are what an edit may refer to.
 
 The DFG and performance DFG are computed in pandas from the canonical order
-(see ``prepare``), so they agree exactly with the bottleneck numbers. pm4py is
-used only for the BPMN model (``pm4py.discover_bpmn_inductive``, verified
-against pm4py 2.7.23.11). Writing files is the caller's job.
+(see ``prepare``), so they agree exactly with the bottleneck numbers. Writing
+files is the caller's job.
 """
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 import pandas as pd
 from pydantic import BaseModel
 
 from processpilot.mining.prepare import directly_follows_pairs
-from processpilot.schema import PM4PY_ACTIVITY, PM4PY_CASE_ID, PM4PY_TIMESTAMP, to_pm4py
-
-if TYPE_CHECKING:
-    from pm4py.objects.bpmn.obj import BPMN
 
 
 class DFGEdge(BaseModel):
@@ -95,18 +92,4 @@ def compute_dfg(df: pd.DataFrame) -> DFGResult:
         start_activities={str(k): int(v) for k, v in sorted(starts.items())},
         end_activities={str(k): int(v) for k, v in sorted(ends.items())},
         edges=edges,
-    )
-
-
-def discover_bpmn(df: pd.DataFrame, noise_threshold: float) -> BPMN:
-    """Inductive-miner BPMN model of the segment (pm4py object, not written)."""
-    import pm4py
-
-    log = to_pm4py(df[["case_id", "activity", "timestamp"]])
-    return pm4py.discover_bpmn_inductive(
-        log,
-        noise_threshold=noise_threshold,
-        activity_key=PM4PY_ACTIVITY,
-        timestamp_key=PM4PY_TIMESTAMP,
-        case_id_key=PM4PY_CASE_ID,
     )

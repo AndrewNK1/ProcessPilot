@@ -44,8 +44,20 @@ def test_valid_path_pauses_for_review_then_approves(run_dir: Path) -> None:
         agent_run_id, state = runner.start(SEGMENT)
         assert state.status == "awaiting_review"
         assert len(state.proposals.proposals) == 2
-        assert [r.status for r in state.edit_results] == ["not_implemented_phase4"] * 2
-        assert [r.status for r in state.validation_results] == ["not_implemented_phase4"] * 2
+        assert [r.status for r in state.edit_results] == ["applied"] * 2
+        assert [r.status for r in state.validation_results] == ["validated"] * 2
+        for edit in state.edit_results:
+            assert Path(edit.to_be_bpmn_path).is_file()
+        assert state.edit_results[0].diff.added == ["Create and Approve Order"]
+        # Answer key (agent_fixtures.case_waits): parallelizing Receive Goods and
+        # Record Invoice saves the shorter wait (2 h) in both cases:
+        # throughput 17/31 h -> 15/29 h, median 24 h -> 22 h.
+        merge_est, par_est = (v.estimate for v in state.validation_results)
+        assert merge_est.median_change_seconds == 0 and merge_est.not_estimated
+        assert par_est.as_is.median_seconds == 24 * 3600
+        assert par_est.to_be.median_seconds == 22 * 3600
+        assert par_est.cases_affected == 2
+        assert all(v.soundness.sound for v in state.validation_results)
         assert {r.id for r in state.evidence_index} >= {f"BN-01-{SLUG}", f"KPI-01-{SLUG}"}
 
         payload = runner.pending_review(SEGMENT, agent_run_id)
@@ -252,6 +264,7 @@ def test_report_views_render_a_logged_run(run_dir: Path) -> None:
     from processpilot.agent.report import (
         diagnosis_markdown,
         issue_details,
+        outcomes_markdown,
         proposals_markdown,
         validation_log,
         warnings_markdown,
@@ -266,7 +279,11 @@ def test_report_views_render_a_logged_run(run_dir: Path) -> None:
     assert "H1 (medium confidence)" in diagnosis_markdown(state.diagnosis)
     md = proposals_markdown(state.proposals)
     assert "merge 'Create Order', 'Approve Order' into 'Create and Approve Order'" in md
-    assert "parallelize activities 'Receive Goods', 'Record Invoice'" in md
+    assert "run 'Receive Goods', 'Record Invoice' in parallel" in md
+    outcomes = outcomes_markdown(state.edit_results, state.validation_results)
+    assert "P1: edits applied" in outcomes and "added: Create and Approve Order" in outcomes
+    assert "**ESTIMATE** median throughput 1.0 days -> 22.0 h (-8.3%)" in outcomes
+    assert "not estimated: merge 'Create Order', 'Approve Order'" in outcomes
     assert warnings_markdown(state.warnings) == "**Warnings:** none."
     rows = validation_log(log)
     # With its only cited id unknown, the hypothesis's two numbers are unsupported too.
@@ -294,3 +311,72 @@ def test_missing_model_env_var_gives_a_setup_hint(
         model_id_from_env(settings)
     monkeypatch.setenv(settings.model.env_var, " anthropic:claude-opus-5-5 ")
     assert model_id_from_env(settings) == "anthropic:claude-opus-5-5"
+
+
+# --- Phase 4: edits applied, validated and estimated ----------------------------
+
+
+def test_inapplicable_edit_is_sent_back_with_the_reason(run_dir: Path) -> None:
+    bad = valid_redesign()
+    # Create Order and Receive Goods are not adjacent: Approve Order is between them.
+    bad["proposals"][1]["edit_operations"] = [
+        {
+            "op": "merge_activities",
+            "activities": ["Create Order", "Receive Goods"],
+            "merged_name": "X",
+        }
+    ]
+    runner, llm = _runner(run_dir, [valid_diagnosis(), bad, valid_redesign()])
+    with runner:
+        _, state = runner.start(SEGMENT)
+    assert state.status == "awaiting_review"
+    assert [r.status for r in state.edit_results] == ["applied"] * 2
+    retry_turns, _ = llm.calls[2]
+    retry = retry_turns[-1].content
+    assert "[edit_not_applicable]" in retry and "between them: Approve Order" in retry
+
+
+def test_to_be_models_are_written_next_to_the_run_log(run_dir: Path) -> None:
+    runner, _ = _runner(run_dir, [valid_diagnosis(), valid_redesign()])
+    with runner:
+        agent_run_id, state = runner.start(SEGMENT)
+        payload = runner.pending_review(SEGMENT, agent_run_id)
+    log = _log(run_dir, agent_run_id)
+    assert (log.directory / "to_be_r0_p1.bpmn").is_file()
+    assert (log.directory / "to_be_r0_p2.bpmn").is_file()
+    # The analyst sees the outcome before deciding.
+    assert payload["validation_results"][1]["estimate"]["label"] == "ESTIMATE"
+    assert payload["edit_results"][0]["diff"]["added"] == ["Create and Approve Order"]
+    nodes = [e.get("node") for e in log.events() if e["kind"] == "node"]
+    assert "apply_edits" in nodes and "validate" in nodes
+
+
+def test_run_mined_before_phase_4_fails_edits_gracefully(tmp_path: Path) -> None:
+    old_run = write_run_dir(tmp_path, with_model=False)
+    runner, _ = _runner(old_run, [valid_diagnosis(), valid_redesign()])
+    with runner:
+        _, state = runner.start(SEGMENT)
+    assert state.status == "awaiting_review"
+    assert [r.status for r in state.edit_results] == ["failed"] * 2
+    assert "re-run mining" in state.edit_results[0].message
+    assert [r.status for r in state.validation_results] == ["skipped"] * 2
+
+
+def test_prompt_lists_unmodelled_activities(tmp_path: Path) -> None:
+    from agent_fixtures import ACTIVITIES, as_is_tree
+    from processpilot.mining.run import AS_IS_TREE_FILE
+    from processpilot.process_tree import leaf, node
+    from processpilot.redesign.bpmn_edit import save_tree
+
+    run = write_run_dir(tmp_path)
+    # The model leaves Approve Order out (as the inductive miner does with rare activities).
+    without = node("sequence", *(leaf(a) for a in ACTIVITIES if a != "Approve Order"))
+    assert without != as_is_tree()
+    save_tree(without, run / SLUG / AS_IS_TREE_FILE)
+    runner, llm = _runner(run, [valid_diagnosis(), valid_redesign(), valid_redesign()])
+    with runner:
+        runner.start(SEGMENT)
+    turns, _ = llm.calls[0]
+    prompt = turns[-1].content
+    assert "too rare to be part of the as-is model" in prompt
+    assert "- Approve Order" in prompt.split("too rare")[1].split("##")[0]

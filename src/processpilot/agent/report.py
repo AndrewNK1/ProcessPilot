@@ -9,20 +9,15 @@ from __future__ import annotations
 from typing import Any
 
 from processpilot.agent.runlog import RunLogger
-from processpilot.agent.state import Diagnosis, RedesignSet, ValidationIssue, existing_activities
-
-
-def _op_text(op: Any) -> str:
-    match op.op:
-        case "add_activity":
-            return f"add '{op.name}' after '{op.after}'"
-        case "merge_activities":
-            return f"merge {', '.join(repr(a) for a in op.activities)} into '{op.merged_name}'"
-        case "reorder_activities":
-            return f"move '{op.activity}' to directly after '{op.after}'"
-        case _:
-            names = ", ".join(repr(a) for a in existing_activities(op))
-            return f"{op.op.replace('_', ' ')} {names}"
+from processpilot.agent.state import (
+    Diagnosis,
+    EditResult,
+    ProposalValidation,
+    RedesignSet,
+    ValidationIssue,
+)
+from processpilot.mining.evidence import format_duration
+from processpilot.redesign.operations import describe
 
 
 def diagnosis_markdown(diagnosis: Diagnosis) -> str:
@@ -43,7 +38,7 @@ def proposals_markdown(redesign: RedesignSet) -> str:
     out = []
     for i, p in enumerate(redesign.proposals, start=1):
         out.append(f"### P{i}. {p.title}  \n`{p.heuristic_id}`")
-        out += [f"- edit: {_op_text(op)}" for op in p.edit_operations]
+        out += [f"- edit: {describe(op)}" for op in p.edit_operations]
         out.append(f"- evidence: {', '.join(p.evidence_ids)}")
         if p.domain_fact_ids:
             out.append(f"- domain facts: {', '.join(p.domain_fact_ids)}")
@@ -51,6 +46,48 @@ def proposals_markdown(redesign: RedesignSet) -> str:
         out.append(f"- expected effect (qualitative): {p.expected_effect}")
         out += [f"- risk: {r}" for r in p.risks]
         out += [f"- assumption: {a}" for a in p.assumptions]
+        out.append("")
+    return "\n".join(out)
+
+
+def outcomes_markdown(
+    edit_results: list[EditResult], validation_results: list[ProposalValidation]
+) -> str:
+    """Per proposal: whether it applied, the model diff, soundness and the ESTIMATE."""
+    checks = {v.proposal_index: v for v in validation_results}
+    out = []
+    for edit in edit_results:
+        out.append(f"### P{edit.proposal_index + 1}: edits {edit.status}")
+        if edit.status != "applied":
+            out += [f"- {edit.message}", ""]
+            continue
+        if edit.diff is not None:
+            d = edit.diff
+            for label, names in (
+                ("added", d.added),
+                ("checks added", d.checks_added),
+                ("removed", d.removed),
+                ("automated", d.automated),
+            ):
+                if names:
+                    out.append(f"- {label}: {', '.join(names)}")
+        out.append(f"- to-be model: `{edit.to_be_bpmn_path}`")
+        v = checks.get(edit.proposal_index)
+        if v is not None and v.soundness is not None:
+            out.append(
+                f"- soundness: {'sound' if v.soundness.sound else 'NOT sound'} "
+                f"({v.soundness.method})"
+            )
+        if v is not None and v.estimate is not None:
+            e = v.estimate
+            share = f" ({e.median_change_share:+.1%})" if e.median_change_share is not None else ""
+            out.append(
+                f"- **ESTIMATE** median throughput {format_duration(e.as_is.median_seconds)} "
+                f"-> {format_duration(e.to_be.median_seconds)}{share}; "
+                f"{e.cases_affected:,} of {e.case_count:,} cases affected"
+            )
+            out += [f"  - assumption: {a}" for a in e.assumptions]
+            out += [f"  - not estimated: {n}" for n in e.not_estimated]
         out.append("")
     return "\n".join(out)
 

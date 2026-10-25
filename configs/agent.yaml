@@ -48,6 +48,22 @@ review:
   # next rejection finalises the run as "rejected".
   max_revision_loops: 2
 
+redesign:
+  # Assumptions of the replay-based impact ESTIMATE (redesign/simulate.py).
+  # Shown next to every estimate; change them here, never in code.
+  estimate:
+    # Share of an automated activity's wait that disappears. Cautious default
+    # chosen by the user (Phase 4); not measured from any log.
+    automate_wait_reduction: 0.5
+    # Cost of a newly added activity or check per occurrence:
+    # segment_median = the segment's median wait before an activity; zero.
+    added_activity_wait: segment_median
+  # Woflan is run as an independent soundness check only up to this many
+  # Petri-net transitions. Measured on BPI 2019: 22 and 33 transitions finish
+  # in < 0.2 s; 91 and 126 did not finish within 120 s. Larger models rely on
+  # soundness by construction plus the structural check (redesign/soundness.py).
+  woflan_max_transitions: 40
+
 # USD per million tokens. Anthropic list prices cached 2026-10-06; verify
 # against the provider's pricing page before quoting a cost in the thesis.
 # Cache writes are 1.25x input (5-minute TTL). A model missing here is logged

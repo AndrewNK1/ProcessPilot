@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import platform
-import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -24,29 +23,41 @@ import pandas as pd
 from processpilot.mining.activities import ActivityWaitSummary, compute_activity_waits
 from processpilot.mining.bottlenecks import rank_bottlenecks
 from processpilot.mining.conformance import check_rules
-from processpilot.mining.discovery import DFGResult, compute_dfg, discover_bpmn
+from processpilot.mining.discovery import DFGResult, compute_dfg
 from processpilot.mining.evidence import EvidenceStore, build_segment_evidence, segment_slug
 from processpilot.mining.filtering import filter_variants
 from processpilot.mining.kpis import compute_kpis
-from processpilot.mining.prepare import collapse_same_instant_repeats
+from processpilot.mining.prepare import collapse_same_instant_repeats, event_waits
 from processpilot.mining.reference import check_reference_model, not_performed
 from processpilot.mining.resources import analyse_resources
 from processpilot.mining.rework import analyse_rework
 from processpilot.mining.settings import MiningSettings
 from processpilot.mining.variants import analyse_variants
+from processpilot.process_tree import (
+    TreeNode,
+    discover_tree,
+    graphviz_available,
+    render_png,
+    write_bpmn,
+)
+
+# Per-segment artefacts the redesign layer reads.
+AS_IS_TREE_FILE = "as_is_tree.json"
+CASE_WAITS_FILE = "case_waits.parquet"
 
 _VERSIONED_PACKAGES = ("processpilot", "pm4py", "pandas", "numpy", "pyarrow", "pydantic")
 
 
 @dataclass(frozen=True)
 class SegmentMiningResult:
-    """Everything mined for one segment; the BPMN is a pm4py object (or None)."""
+    """Everything mined for one segment; ``tree`` is ``None`` when discovery was skipped."""
 
     segment: str
     evidence: EvidenceStore
     dfg: DFGResult
     activity_waits: ActivityWaitSummary
-    bpmn: Any | None
+    case_waits: pd.DataFrame
+    tree: TreeNode | None
 
 
 def mine_segment(
@@ -127,13 +138,18 @@ def mine_segment(
         activity_waits=activity_waits.activities[: a.top_n_activity_waits],
         reference=reference,
     )
-    bpmn = (
-        discover_bpmn(discovery_df, settings.discovery.inductive_miner_noise_threshold)
+    tree = (
+        discover_tree(discovery_df, settings.discovery.inductive_miner_noise_threshold)
         if discover_model
         else None
     )
     return SegmentMiningResult(
-        segment=segment, evidence=evidence, dfg=dfg, activity_waits=activity_waits, bpmn=bpmn
+        segment=segment,
+        evidence=evidence,
+        dfg=dfg,
+        activity_waits=activity_waits,
+        case_waits=event_waits(mining_df),
+        tree=tree,
     )
 
 
@@ -164,14 +180,17 @@ def write_run(
     Returns the merged store; raises if two segments slugify to the same
     folder name, since their evidence ids would collide too.
 
-    BPMN layout: pm4py's auto-layout shells out to Graphviz ``dot``. Without
-    it the model is still complete and re-readable, but every shape sits at
-    (0, 0); the manifest records which happened so a degenerate diagram is
+    Per segment, besides the evidence: ``as_is_tree.json`` (the editable
+    model), ``as_is.bpmn`` rendered from it with stable element ids,
+    ``as_is.png`` and ``case_waits.parquet`` (per-event waits for the impact
+    estimate; no other event attributes).
+
+    BPMN layout and PNGs need Graphviz ``dot``. Without it the model is still
+    complete and re-readable, but every shape sits at (0, 0) and no PNG is
+    drawn; the manifest records which happened so a degenerate diagram is
     never mistaken for a layout bug.
     """
-    import pm4py
-
-    auto_layout = shutil.which("dot") is not None
+    auto_layout = graphviz_available()
 
     slugs = [segment_slug(r.segment) for r in results]
     if len(set(slugs)) != len(slugs):
@@ -189,8 +208,13 @@ def write_run(
             {**view.model_dump(), "hidden_edge_count": hidden},
         )
         result.evidence.to_json(seg_dir / "evidence.json")
-        if result.bpmn is not None:
-            pm4py.write_bpmn(result.bpmn, str(seg_dir / "as_is.bpmn"), auto_layout=auto_layout)
+        result.case_waits.to_parquet(seg_dir / CASE_WAITS_FILE, index=False)
+        if result.tree is not None:
+            (seg_dir / AS_IS_TREE_FILE).write_text(
+                result.tree.model_dump_json(indent=2), encoding="utf-8"
+            )
+            write_bpmn(result.tree, seg_dir / "as_is.bpmn", process_id=f"as_is_{slug}")
+            render_png(result.tree, seg_dir / "as_is.png")
         merged = merged.merged(result.evidence)
 
     merged.to_json(run_dir / "evidence.json")

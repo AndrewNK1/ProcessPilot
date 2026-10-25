@@ -7,9 +7,10 @@ trimmed to its valid parts.
 
 Checks: cited evidence IDs exist (in this segment), cited domain facts exist,
 heuristic IDs exist in the catalogue and are BPMN-editable, activities named
-in edit operations exist in the segment's as-is process, no operation modifies
-a protected activity, and no free-text field contains a number that does not
-appear in the evidence that claim cites.
+in edit operations exist in the segment's as-is model, no operation modifies
+a protected activity, every proposal can actually be applied to the as-is
+model (trial run of ``redesign.operations``), and no free-text field contains
+a number that does not appear in the evidence that claim cites.
 
 The number check is deliberately conservative: a number "appears" in the
 evidence if some number in the cited items' rendering rounds to it at the
@@ -29,7 +30,9 @@ from processpilot.agent.catalogue import DomainKnowledge, HeuristicCatalogue
 from processpilot.agent.prompts import render_item
 from processpilot.agent.state import (
     AddActivity,
+    AddCheck,
     Diagnosis,
+    EditOperation,
     MergeActivities,
     RedesignSet,
     ValidationIssue,
@@ -37,6 +40,8 @@ from processpilot.agent.state import (
     modified_activities,
 )
 from processpilot.mining.evidence import EvidenceStore
+from processpilot.process_tree import TreeNode
+from processpilot.redesign.operations import EditError, apply_operations
 
 # Tokens whose digits are not quantities: IDs (BN-01-x, D-03, H-TASK-...),
 # identifiers with digits (user_602, P90, R-02), compound adjectives (3-way).
@@ -48,7 +53,14 @@ _FLOAT_TOLERANCE = 1e-9
 
 @dataclass(frozen=True)
 class ValidationContext:
-    """Everything an LLM output is checked against, for one segment."""
+    """Everything an LLM output is checked against, for one segment.
+
+    ``activities`` are those of the as-is model (what an edit may name);
+    ``observed_activities`` adds those mining saw but the model left out as
+    rare -- they may still be mentioned in text. ``as_is_tree``, when given,
+    is used to trial-apply every proposal so an operation that cannot be
+    applied is sent back for a retry instead of failing later.
+    """
 
     segment: str
     store: EvidenceStore
@@ -56,6 +68,8 @@ class ValidationContext:
     catalogue: HeuristicCatalogue
     domain: DomainKnowledge | None
     protected_activities: frozenset[str]
+    as_is_tree: TreeNode | None = None
+    observed_activities: frozenset[str] = frozenset()
 
     @property
     def domain_ids(self) -> set[str]:
@@ -64,7 +78,8 @@ class ValidationContext:
 
     def _strip_terms(self) -> list[str]:
         # Longest first, so "Record Invoice Receipt" goes before "Invoice".
-        return sorted({*self.activities, self.segment}, key=len, reverse=True)
+        names = {*self.activities, *self.observed_activities, self.segment}
+        return sorted(names, key=len, reverse=True)
 
 
 def extract_numbers(text: str, strip_terms: list[str]) -> list[tuple[float, int, str]]:
@@ -178,8 +193,16 @@ def validate_redesign(redesign: RedesignSet, ctx: ValidationContext) -> list[Val
                     ),
                 )
             )
-        for j, op in enumerate(p.edit_operations):
-            issues += _operation_issues(op, f"{path}.edit_operations[{j}]", ctx)
+        op_issues = [
+            issue
+            for j, op in enumerate(p.edit_operations)
+            for issue in _operation_issues(op, f"{path}.edit_operations[{j}]", ctx)
+        ]
+        issues += op_issues
+        # Trial-apply only when every operation passed the per-operation checks,
+        # so one mistake is not reported twice.
+        if not op_issues and ctx.as_is_tree is not None:
+            issues += _applicability_issues(p.edit_operations, path, ctx)
         texts = {
             f"{path}.title": p.title,
             f"{path}.rationale": p.rationale,
@@ -191,22 +214,46 @@ def validate_redesign(redesign: RedesignSet, ctx: ValidationContext) -> list[Val
     return issues
 
 
+def _applicability_issues(
+    ops: list[EditOperation], path: str, ctx: ValidationContext
+) -> list[ValidationIssue]:
+    assert ctx.as_is_tree is not None
+    try:
+        apply_operations(ctx.as_is_tree, ops, ctx.protected_activities)
+    except EditError as exc:
+        return [
+            ValidationIssue(
+                code="edit_not_applicable",
+                path=f"{path}.edit_operations[{exc.index}]",
+                message=f"cannot be applied to the as-is model: {exc.reason}",
+            )
+        ]
+    return []
+
+
 def _operation_issues(op: object, path: str, ctx: ValidationContext) -> list[ValidationIssue]:
     issues = [
         ValidationIssue(
             code="unknown_activity",
             path=path,
-            message=f"{a!r} is not an activity of this segment's as-is process",
+            message=(
+                f"{a!r} is not an activity of this segment's as-is model"
+                + (
+                    " (it occurs in the log but too rarely to be part of the model)"
+                    if a in ctx.observed_activities
+                    else ""
+                )
+            ),
         )
         for a in existing_activities(op)  # type: ignore[arg-type]
         if a not in ctx.activities
     ]
-    if isinstance(op, AddActivity) and op.name in ctx.activities:
+    if isinstance(op, AddActivity | AddCheck) and op.name in ctx.activities:
         issues.append(
             ValidationIssue(
                 code="activity_already_exists",
                 path=f"{path}.name",
-                message=f"add_activity must introduce a new activity; {op.name!r} exists",
+                message=f"{op.op} must introduce a new activity; {op.name!r} exists",
             )
         )
     if (
@@ -228,7 +275,10 @@ def _operation_issues(op: object, path: str, ctx: ValidationContext) -> list[Val
         ValidationIssue(
             code="protected_activity",
             path=path,
-            message=f"{a!r} is protected and may not be removed, moved, merged or parallelized",
+            message=(
+                f"{a!r} is protected and may not be removed, moved, merged or parallelized "
+                "(automating it or adding a step after it is allowed)"
+            ),
         )
         for a in modified_activities(op)  # type: ignore[arg-type]
         if a in ctx.protected_activities

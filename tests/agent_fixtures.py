@@ -16,11 +16,16 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from pydantic import BaseModel
 
 from processpilot.agent.catalogue import AgentSettings, ModelSettings, Price
 from processpilot.agent.llm import ChatTurn, LLMResponse, TokenUsage
 from processpilot.mining.evidence import EvidenceItem, EvidenceStore
+from processpilot.mining.run import AS_IS_TREE_FILE, CASE_WAITS_FILE
+from processpilot.process_tree import TreeNode, leaf, node
+from processpilot.redesign.bpmn_edit import RedesignSettings, save_tree
+from processpilot.redesign.simulate import EstimateSettings
 
 SEGMENT = "Seg A"
 SLUG = "seg-a"
@@ -98,11 +103,37 @@ def evidence_items(segment: str = SEGMENT, slug: str = SLUG) -> list[EvidenceIte
     ]
 
 
-def write_run_dir(root: Path) -> Path:
-    """A mining-run folder with evidence.json and the segment's dfg.json."""
+def as_is_tree() -> TreeNode:
+    """The five activities in strict sequence."""
+    return node("sequence", *(leaf(a) for a in ACTIVITIES))
+
+
+def case_waits() -> pd.DataFrame:
+    """Two cases following the sequence; waits in hours (NaN on the first event).
+
+    k1: -, 1, 10, 2, 4  -> throughput 17 h
+    k2: -, 3, 20, 2, 6  -> throughput 31 h
+    """
+    rows = [("k1", a, w) for a, w in zip(ACTIVITIES, [None, 1, 10, 2, 4], strict=True)]
+    rows += [("k2", a, w) for a, w in zip(ACTIVITIES, [None, 3, 20, 2, 6], strict=True)]
+    df = pd.DataFrame(rows, columns=["case_id", "activity", "wait_seconds"])
+    df["wait_seconds"] = df["wait_seconds"].astype(float) * 3600
+    return df
+
+
+def write_run_dir(root: Path, with_model: bool = True) -> Path:
+    """A mining-run folder with evidence.json and the segment's dfg.json.
+
+    By default also the as-is tree and per-event waits, as mining writes them;
+    ``with_model=False`` mimics a run mined before Phase 4.
+    """
     run_dir = root / "20260101T000000Z"
     store = EvidenceStore(items=evidence_items())
     store.to_json(run_dir / "evidence.json")
+    if with_model:
+        seg_dir = run_dir / SLUG
+        save_tree(as_is_tree(), seg_dir / AS_IS_TREE_FILE)
+        case_waits().to_parquet(seg_dir / CASE_WAITS_FILE, index=False)
     edges = [
         {"source": a, "target": b, "frequency": 8}
         for a, b in zip(ACTIVITIES, ACTIVITIES[1:], strict=False)
@@ -138,6 +169,12 @@ def agent_settings(max_retries: int = 2, max_revision_loops: int = 2) -> AgentSe
         model=ModelSettings(env_var="PP_MODEL", structured_output_method="json_schema"),
         max_retries=max_retries,
         max_revision_loops=max_revision_loops,
+        redesign=RedesignSettings(
+            estimate=EstimateSettings(
+                automate_wait_reduction=0.5, added_activity_wait="segment_median"
+            ),
+            woflan_max_transitions=40,
+        ),
         pricing_usd_per_mtok={
             "claude-opus-5-5": Price(input=4.0, output=20.0, cache_read=0.2, cache_write=5.0)
         },

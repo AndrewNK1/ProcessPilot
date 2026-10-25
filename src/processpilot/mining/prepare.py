@@ -54,6 +54,25 @@ def directly_follows_pairs(df: pd.DataFrame) -> pd.DataFrame:
     return pairs.loc[same_case].reset_index(drop=True)
 
 
+def event_waits(df: pd.DataFrame) -> pd.DataFrame:
+    """``case_id``, ``activity``, ``wait_seconds`` per event, in canonical order.
+
+    ``wait_seconds`` is the time since the previous event of the case (NaN on
+    each case's first event), so it sums to the case's throughput time. It is
+    what the redesign impact estimate replays; no other attribute is kept.
+    """
+    assert_canonical_schema(df)
+    same_case = df["case_id"] == df["case_id"].shift(1)
+    wait = (df["timestamp"] - df["timestamp"].shift(1)).dt.total_seconds()
+    return pd.DataFrame(
+        {
+            "case_id": df["case_id"].astype(str),
+            "activity": df["activity"].astype(str),
+            "wait_seconds": wait.where(same_case.fillna(False).astype(bool)),
+        }
+    ).reset_index(drop=True)
+
+
 def case_throughput_seconds(df: pd.DataFrame) -> pd.Series:
     """Seconds from first to last event, indexed by ``case_id``."""
     grouped = df.groupby("case_id", sort=True)["timestamp"]

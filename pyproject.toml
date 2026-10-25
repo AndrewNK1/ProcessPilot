@@ -21,6 +21,11 @@ dependencies = [
     "pm4py>=2.7.11,<3.0",
     "pandas>=2.2,<4.0",
     "pyarrow>=15,<27",
+    # LP solver for pm4py's Woflan soundness check (Phase 4); without it pm4py
+    # falls back to scipy and warns that results "may be unstable". Verified 3.3.2.
+    # The <4.0 cap is load-bearing: pm4py 2.7 calls PuLP APIs that 3.x marks
+    # deprecated and 4.0 removes (LpVariable(...), PULP_CBC_CMD).
+    "pulp>=2.8,<4.0",
     # Typed data crossing module boundaries.
     "pydantic>=2.7,<3.0",
     # Agent orchestration (fixed graph, not a free-roaming agent).

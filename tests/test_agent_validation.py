@@ -320,3 +320,48 @@ def test_cost_accounts_for_cache_tokens() -> None:
     assert cost_usd(usage, None) is None
     assert cost_usd(TokenUsage(), price) is None
     assert bare_model_name("anthropic:claude-opus-5-5") == "claude-opus-5-5"
+
+
+# --- trial application on the as-is model (Phase 4) ------------------------------
+
+
+def test_inapplicable_edit_is_reported_for_retry(ctx: ValidationContext) -> None:
+    from dataclasses import replace
+
+    from agent_fixtures import as_is_tree
+
+    with_model = replace(ctx, as_is_tree=as_is_tree())
+    redesign = valid_redesign()
+    # Create Order and Receive Goods are not adjacent: Approve Order is between them.
+    redesign["proposals"][1]["edit_operations"] = [
+        {"op": "parallelize_activities", "activities": ["Create Order", "Receive Goods"]}
+    ]
+    issues = validate_redesign(RedesignSet.model_validate(redesign), with_model)
+    assert _codes(issues) == ["edit_not_applicable"]
+    assert issues[0].path == "proposals[1].edit_operations[0]"
+    assert "between them: Approve Order" in issues[0].message
+    # Without a model the trial run is skipped (runs mined before Phase 4).
+    assert validate_redesign(RedesignSet.model_validate(redesign), ctx) == []
+
+
+def test_rare_activity_outside_the_model_is_explained(ctx: ValidationContext) -> None:
+    from dataclasses import replace
+
+    rare = replace(ctx, observed_activities=frozenset({*ACTIVITIES, "Rare Step"}))
+    redesign = valid_redesign()
+    redesign["proposals"][0]["edit_operations"] = [
+        {"op": "remove_activity", "activity": "Rare Step"}
+    ]
+    issues = validate_redesign(RedesignSet.model_validate(redesign), rare)
+    assert _codes(issues) == ["unknown_activity"]
+    assert "too rarely to be part of the model" in issues[0].message
+
+
+def test_new_operations_are_validated(ctx: ValidationContext) -> None:
+    redesign = valid_redesign()
+    redesign["proposals"][0]["edit_operations"] = [
+        {"op": "add_check", "name": "Approve Order", "after": "Create Order"},
+        {"op": "automate_activity", "activity": "Pay Invoice"},  # protected: allowed
+    ]
+    issues = validate_redesign(RedesignSet.model_validate(redesign), ctx)
+    assert _codes(issues) == ["activity_already_exists"]

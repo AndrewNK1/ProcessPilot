@@ -20,10 +20,12 @@
 #                 single-timestamp event-log evidence is this project's own
 #                 interpretation and should be argued in the thesis.
 #
-# STATUS: v1 (Phase 3). Phase 4 may tighten the typical_operations once
-# bpmn_edit implements them.
+# STATUS: v2 (Phase 4). v1 -> v2: automate_activity and add_check added to
+# the operation vocabulary; H-AUTOMATION now uses automate_activity, and
+# H-EXCEPTION / H-CONTROL-RELOCATION may add a check step. `activity`
+# (wait before an activity, AW-*) is a valid evidence_type.
 # ---------------------------------------------------------------------------
-version: 1
+version: 2
 
 heuristics:
   - id: H-TASK-ELIMINATION
@@ -125,7 +127,9 @@ heuristics:
         signal: "a frequent transition (high case_share) into a routine activity with a long median wait"
       - evidence_type: resource
         signal: "a single resource (RS-*) recording a large event_share of one routine activity"
-    typical_operations: [merge_activities, remove_activity]
+      - evidence_type: activity
+        signal: "a routine activity (AW-*) with a long median wait before it in a high case_share"
+    typical_operations: [automate_activity, merge_activities, remove_activity]
     risks: "Implementation cost; exception handling must stay manual."
     bpmn_editable: true
     confidence: established
@@ -153,7 +157,7 @@ heuristics:
         signal: "a low top_n_case_share (many rare variants) with rare variants much slower than the happy path"
       - evidence_type: kpi
         signal: "mean throughput far above median throughput (a long tail of slow cases)"
-    typical_operations: [add_activity, reorder_activities]
+    typical_operations: [add_check, add_activity, reorder_activities]
     risks: "Needs a reliable early classifier to route cases."
     bpmn_editable: true
     confidence: established
@@ -198,7 +202,7 @@ heuristics:
         signal: "a correction or change activity repeated in many cases"
       - evidence_type: conformance
         signal: "a rule with a material violation_share on completed cases"
-    typical_operations: [add_activity, remove_activity, reorder_activities]
+    typical_operations: [add_check, add_activity, remove_activity, reorder_activities]
     risks: "Depends on the other party's reliability; the organisation keeps accountability for the control."
     bpmn_editable: true
     confidence: uncertain

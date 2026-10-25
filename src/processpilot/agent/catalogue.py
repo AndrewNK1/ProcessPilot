@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from processpilot.agent.state import OPERATION_NAMES
 from processpilot.config import load_config_yaml
+from processpilot.mining.evidence import EvidenceType
+from processpilot.redesign.bpmn_edit import RedesignSettings
 
 
 def _reject_duplicates(ids: list[str], what: str) -> None:
@@ -27,9 +29,7 @@ def _reject_duplicates(ids: list[str], what: str) -> None:
 class Applicability(BaseModel):
     """One evidence signal that makes a heuristic worth considering."""
 
-    evidence_type: Literal[
-        "bottleneck", "activity", "variant", "rework", "resource", "conformance", "kpi"
-    ]
+    evidence_type: EvidenceType
     signal: str
 
 
@@ -140,6 +140,7 @@ class AgentSettings(BaseModel):
     model: ModelSettings
     max_retries: int = Field(ge=0)
     max_revision_loops: int = Field(ge=0)
+    redesign: RedesignSettings
     pricing_usd_per_mtok: dict[str, Price] = Field(default_factory=dict)
 
     @classmethod
@@ -149,6 +150,7 @@ class AgentSettings(BaseModel):
             model=raw["model"],
             max_retries=raw["validation"]["max_retries"],
             max_revision_loops=raw["review"]["max_revision_loops"],
+            redesign=raw["redesign"],
             pricing_usd_per_mtok=raw.get("pricing_usd_per_mtok") or {},
         )
 
