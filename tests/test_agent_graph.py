@@ -280,3 +280,17 @@ def test_report_views_render_a_logged_run(run_dir: Path) -> None:
         "unsupported_number",
         "unsupported_number",
     ]
+
+
+def test_missing_model_env_var_gives_a_setup_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from processpilot.agent.catalogue import load_agent_settings
+    from processpilot.agent.graph import model_id_from_env
+
+    settings = load_agent_settings()
+    monkeypatch.delenv(settings.model.env_var, raising=False)
+    with pytest.raises(OSError, match=r"\.env\.example"):
+        model_id_from_env(settings)
+    monkeypatch.setenv(settings.model.env_var, " anthropic:claude-opus-5-5 ")
+    assert model_id_from_env(settings) == "anthropic:claude-opus-5-5"

@@ -48,11 +48,16 @@ class DataQualityIssue(BaseModel):
 
 
 class CleaningAction(BaseModel):
-    """One removal actually applied by ``apply_cleaning``, logged for the record."""
+    """One removal actually applied by ``apply_cleaning``, logged for the record.
+
+    ``cases_removed`` counts cases that disappeared entirely; ``cases_affected``
+    counts cases that lost rows but survive (e.g. a dropped duplicate event).
+    """
 
     code: str
     rows_removed: int
     cases_removed: int
+    cases_affected: int = 0
 
 
 class DataQualityReport(BaseModel):
@@ -71,6 +76,12 @@ class DataQualityReport(BaseModel):
                 columns=["code", "severity", "message", "count", "share", "example_rows"]
             )
         return pd.DataFrame([issue.model_dump() for issue in self.issues])
+
+
+def segment_mixed_cases(df: pd.DataFrame) -> list[str]:
+    """Case ids whose ``segment`` value is not the same on every event (null counts)."""
+    per_case = df.groupby("case_id", sort=True)["segment"].nunique(dropna=False)
+    return [str(c) for c in per_case.index[per_case > 1]]
 
 
 def _example_rows(df: pd.DataFrame, mask: pd.Series, columns: list[str]) -> list[dict[str, Any]]:
@@ -257,6 +268,28 @@ def validate(
                 )
             )
 
+    # --- segment must be constant within a case -------------------------
+    # Segmenting splits the log by case. If the segment column is an event
+    # attribute that changes within a case, the split would cut that case's
+    # trace into pieces and every per-segment number would be wrong.
+    if {"case_id", "segment"}.issubset(df.columns):
+        mixed = segment_mixed_cases(df)
+        if len(mixed) > 0:
+            mask = df["case_id"].isin(mixed)
+            issues.append(
+                DataQualityIssue(
+                    code="segment_varies_within_case",
+                    severity="error",
+                    message=(
+                        f"{len(mixed)} case(s) have more than one segment value; segment_by "
+                        "must be a case-level attribute."
+                    ),
+                    count=len(mixed),
+                    share=float(mask.mean()),
+                    example_rows=_example_rows(df, mask, [*display_cols, "segment"]),
+                )
+            )
+
     # --- activity cardinality --------------------------------------------
     if "activity" in df.columns:
         n_activities = df["activity"].nunique()
@@ -298,6 +331,7 @@ def apply_cleaning(
     df: pd.DataFrame,
     report: DataQualityReport,
     *,
+    drop_cases_with_missing_values: bool = False,
     drop_cases_with_out_of_range_timestamps: bool = False,
     drop_single_event_cases: bool = False,
     drop_exact_duplicate_events: bool = False,
@@ -311,9 +345,32 @@ def apply_cleaning(
     Nothing is removed unless the corresponding flag is ``True`` -- the
     default calling ``validate()`` and discarding nothing is always the
     starting point.
+
+    ``drop_cases_with_missing_values`` drops rows without a case id (they
+    belong to no case) and every case with a missing or unparseable activity
+    or timestamp. WHY the whole case: dropping only the bad event would leave
+    a trace with a silent gap, and its waits would be measured across it.
     """
     out = df
     cleaning_log = list(report.cleaning_log)
+
+    if drop_cases_with_missing_values:
+        no_case = out["case_id"].isna()
+        bad_event = pd.Series(False, index=out.index)
+        for col in ("activity", "timestamp"):
+            if col in out.columns:
+                bad_event |= out[col].isna()
+        bad_cases = out.loc[bad_event & ~no_case, "case_id"].unique()
+        drop = no_case | out["case_id"].isin(bad_cases)
+        if drop.any():
+            cleaning_log.append(
+                CleaningAction(
+                    code="drop_cases_with_missing_values",
+                    rows_removed=int(drop.sum()),
+                    cases_removed=int(len(bad_cases)),
+                )
+            )
+            out = out.loc[~drop].reset_index(drop=True)
 
     if drop_cases_with_out_of_range_timestamps and "timestamp" in out.columns:
         lo = pd.Timestamp(plausible_timestamp_min) if plausible_timestamp_min else None
@@ -360,7 +417,9 @@ def apply_cleaning(
                 CleaningAction(
                     code="drop_exact_duplicate_events",
                     rows_removed=int(dup_mask.sum()),
-                    cases_removed=int(affected_cases),
+                    # keep="first" leaves one copy, so no case disappears.
+                    cases_removed=0,
+                    cases_affected=int(affected_cases),
                 )
             )
             out = out.loc[~dup_mask].reset_index(drop=True)

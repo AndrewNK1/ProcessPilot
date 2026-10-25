@@ -65,8 +65,13 @@ def assert_canonical_schema(df: pd.DataFrame) -> None:
     if ts.dtype != TIMESTAMP_DTYPE:
         raise ValueError(f"'timestamp' must be {TIMESTAMP_DTYPE}, got {ts.dtype}")
 
-    sorted_df = df.sort_values(["case_id", "timestamp"], kind="stable")
-    if not df.index.equals(sorted_df.index):
+    # One linear pass instead of re-sorting: mining calls this on every
+    # function entry, and a full sort of a 1.3M-row segment costs ~1 s each.
+    case_id = df["case_id"]
+    prev_case = case_id.shift(1)
+    case_goes_back = (case_id < prev_case).fillna(False)
+    time_goes_back = ((case_id == prev_case) & (ts < ts.shift(1))).fillna(False)
+    if bool((case_goes_back | time_goes_back).any()):
         raise ValueError("dataframe is not sorted by (case_id, timestamp)")
 
 

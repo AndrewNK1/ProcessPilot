@@ -16,6 +16,7 @@ from agent_fixtures import (
 from processpilot.agent.catalogue import (
     DomainFact,
     DomainKnowledge,
+    HeuristicCatalogue,
     Price,
     load_agent_settings,
     load_domain_knowledge,
@@ -275,6 +276,16 @@ def test_repo_heuristics_catalogue_is_valid() -> None:
         assert set(h.typical_operations) <= set(OPERATION_NAMES)
     assert "H-EXTRA-RESOURCES" in cat.ids()
     assert "H-EXTRA-RESOURCES" not in {h.id for h in cat.editable()}
+
+
+def test_duplicate_heuristic_or_fact_ids_fail_at_load() -> None:
+    raw = load_heuristics().model_dump()
+    raw["heuristics"].append(raw["heuristics"][0])
+    with pytest.raises(ValueError, match="duplicate heuristic"):
+        HeuristicCatalogue.model_validate(raw)
+    fact = DomainFact(id="D-01", statement="x")
+    with pytest.raises(ValueError, match="duplicate domain fact"):
+        DomainKnowledge(version=1, domain="d", facts=[fact, fact])
 
 
 def test_repo_domain_knowledge_and_agent_settings_load() -> None:

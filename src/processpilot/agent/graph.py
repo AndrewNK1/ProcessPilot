@@ -115,6 +115,18 @@ def segment_activities(run_dir: Path, segment: str) -> list[str]:
     return sorted(names)
 
 
+def model_id_from_env(settings: AgentSettings) -> str:
+    """The model id from ``settings.model.env_var``, with a setup hint if unset."""
+    var = settings.model.env_var
+    model_id = os.environ.get(var, "").strip()
+    if not model_id:
+        raise OSError(
+            f"environment variable {var} is not set; set it in .env (see .env.example), "
+            "e.g. anthropic:claude-opus-5-5, and call config.load_env() first"
+        )
+    return model_id
+
+
 def _new_agent_run_id(segment_dir: Path) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     candidate, n = stamp, 1
@@ -148,7 +160,7 @@ class AgentRunner:
         self.catalogue = catalogue or load_heuristics()
         self.domain = domain or load_domain_knowledge(preset.get("domain_knowledge"))
         self.store = EvidenceStore.from_json(self.run_dir / "evidence.json")
-        self.llm = llm or LangChainLLM(os.environ[self.settings.model.env_var], self.settings.model)
+        self.llm = llm or LangChainLLM(model_id_from_env(self.settings), self.settings.model)
         self._saver, self._conn = open_checkpointer(self.run_dir / CHECKPOINT_FILE)
 
     def __enter__(self) -> AgentRunner:

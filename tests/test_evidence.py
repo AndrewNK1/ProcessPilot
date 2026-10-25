@@ -189,3 +189,14 @@ def test_rule_with_absent_activities_says_it_was_not_evaluated(
     summary = store.get("CF-R-9-all").summary
     assert "could not be evaluated on any case" in summary
     assert "likely misconfigured" in summary
+
+
+def test_rework_without_single_occurrence_baseline_says_so(
+    mining_log: pd.DataFrame, mining_settings: MiningSettings
+) -> None:
+    # Only c3 (which repeats B) kept: no case performs B exactly once.
+    only_c3 = mining_log[mining_log["case_id"] == "c3"].reset_index(drop=True)
+    store = mine_segment(only_c3, "<all>", mining_settings, discover_model=False).evidence
+    summary = store.get("RW-01-all").summary
+    assert "no throughput comparison is possible" in summary
+    assert "n/a" not in summary

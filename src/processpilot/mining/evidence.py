@@ -238,6 +238,14 @@ def build_segment_evidence(
 
     for r in rework:
         loop_ref = bn_ids.get((r.activity, r.activity))
+        comparison = (
+            "no case performs it only once, so no throughput comparison is possible"
+            if r.extra_median_throughput_seconds is None
+            else (
+                f"those cases take a median {format_duration(r.extra_median_throughput_seconds)} "
+                "longer than cases performing it once (association, not proven cause)"
+            )
+        )
         items.append(
             EvidenceItem(
                 id=f"RW-{r.rank:02d}-{slug}",
@@ -245,9 +253,8 @@ def build_segment_evidence(
                 type="rework",
                 summary=(
                     f"'{r.activity}' is repeated within {_pct(r.case_share)} of cases "
-                    f"({r.case_count:,}; {r.extra_occurrences:,} extra executions); those cases "
-                    f"take a median {format_duration(r.extra_median_throughput_seconds)} longer "
-                    "than cases performing it once (association, not proven cause)."
+                    f"({r.case_count:,}; {r.extra_occurrences:,} extra executions); "
+                    f"{comparison}."
                 ),
                 metrics=r.model_dump(),
                 refs=[kpi_id, *([loop_ref] if loop_ref else [])],

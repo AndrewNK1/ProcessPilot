@@ -185,7 +185,59 @@ def test_apply_cleaning_drops_exact_duplicates_when_requested(
     )
     c4 = cleaned_df[cleaned_df["case_id"] == "c4"]
     assert len(c4) == 2  # A, B -- one copy of the duplicated B removed
-    assert cleaned_report.cleaning_log[0].rows_removed == 1
+    action = cleaned_report.cleaning_log[0]
+    assert action.rows_removed == 1
+    # Regression: c4 lost a row but still exists, so it was not "removed".
+    assert (action.cases_removed, action.cases_affected) == (0, 1)
+
+
+def test_apply_cleaning_drops_cases_with_missing_values(
+    dirty_canonical_log: pd.DataFrame,
+) -> None:
+    report = validate(dirty_canonical_log)
+    cleaned_df, cleaned_report = apply_cleaning(
+        dirty_canonical_log, report, drop_cases_with_missing_values=True
+    )
+    # c7's null-case row belongs to no case and goes alone; c8 has a null
+    # activity, so the whole case goes rather than leaving a gap in its trace.
+    assert set(cleaned_df["case_id"]) == {"c1", "c2", "c3", "c4", "c5", "c6", "c7"}
+    assert cleaned_df["case_id"].notna().all()
+    assert list(cleaned_df.loc[cleaned_df["case_id"] == "c7", "activity"]) == ["A", "C"]
+    (action,) = cleaned_report.cleaning_log
+    assert (action.rows_removed, action.cases_removed) == (3, 1)
+
+
+def test_unparseable_timestamp_case_dropped_as_missing_value() -> None:
+    raw = pd.DataFrame(
+        {
+            "case": ["c1", "c1", "c2"],
+            "act": ["A", "B", "A"],
+            "ts": ["2019-01-01", "junk", "2019-01-02"],
+        }
+    )
+    df = apply_mapping(raw, ColumnMapping(case_id="case", activity="act", timestamp="ts"))
+    cleaned, _ = apply_cleaning(df, validate(df), drop_cases_with_missing_values=True)
+    assert list(cleaned["case_id"]) == ["c2"]
+
+
+def test_segment_varying_within_a_case_is_an_error() -> None:
+    from processpilot.ingest.mapping import split_by_segment
+
+    raw = pd.DataFrame(
+        {
+            "case": ["c1", "c1", "c2"],
+            "act": ["A", "B", "A"],
+            "ts": ["2019-01-01", "2019-01-02", "2019-01-03"],
+            "seg": ["x", "y", "x"],
+        }
+    )
+    df = apply_mapping(
+        raw, ColumnMapping(case_id="case", activity="act", timestamp="ts", segment_by="seg")
+    )
+    issue = _issue(validate(df), "segment_varies_within_case")
+    assert issue is not None and (issue.count, issue.severity) == (1, "error")
+    with pytest.raises(ValueError, match="case-level attribute"):
+        split_by_segment(df)
 
 
 # --- regressions found in the Phase 1 review --------------------------------

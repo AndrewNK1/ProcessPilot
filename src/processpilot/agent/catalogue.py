@@ -8,12 +8,20 @@ time, not let a proposal through later.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 from processpilot.agent.state import OPERATION_NAMES
 from processpilot.config import load_config_yaml
+
+
+def _reject_duplicates(ids: list[str], what: str) -> None:
+    """A duplicated id would make a citation ambiguous; fail at load time."""
+    dupes = sorted(i for i, n in Counter(ids).items() if n > 1)
+    if dupes:
+        raise ValueError(f"duplicate {what} id(s): {dupes}")
 
 
 class Applicability(BaseModel):
@@ -52,6 +60,12 @@ class HeuristicCatalogue(BaseModel):
     version: int
     heuristics: list[Heuristic]
 
+    @field_validator("heuristics")
+    @classmethod
+    def _unique_ids(cls, heuristics: list[Heuristic]) -> list[Heuristic]:
+        _reject_duplicates([h.id for h in heuristics], "heuristic")
+        return heuristics
+
     def ids(self) -> set[str]:
         """Every heuristic id, editable or not."""
         return {h.id for h in self.heuristics}
@@ -74,6 +88,12 @@ class DomainKnowledge(BaseModel):
     version: int
     domain: str
     facts: list[DomainFact] = Field(max_length=15)
+
+    @field_validator("facts")
+    @classmethod
+    def _unique_ids(cls, facts: list[DomainFact]) -> list[DomainFact]:
+        _reject_duplicates([f.id for f in facts], "domain fact")
+        return facts
 
     def ids(self) -> set[str]:
         """Every fact id."""

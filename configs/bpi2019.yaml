@@ -69,6 +69,9 @@ validation:
 # Cleaning is opt-in and chosen by the caller; listed here as the suggested
 # default policy for this dataset, not as something applied automatically.
 suggested_cleaning_policy:
+  # BPI 2019 has no null or unparseable required values (Phase 1 report), so
+  # this changes nothing here; it is listed so every option is visible.
+  drop_cases_with_missing_values: false
   drop_cases_with_out_of_range_timestamps: true
   drop_single_event_cases: false
   drop_exact_duplicate_events: false

@@ -33,6 +33,7 @@ import pandas as pd
 from pydantic import BaseModel, Field, model_validator
 
 from processpilot.config import load_preset_yaml
+from processpilot.ingest.validate import segment_mixed_cases
 from processpilot.schema import (
     CANONICAL_COLUMNS,
     TIMESTAMP_DTYPE,
@@ -336,10 +337,18 @@ def split_by_segment(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
     Returns ``{"<all>": df}`` when there is no ``segment`` column, so callers
     can always iterate the result the same way regardless of whether
-    segmenting is configured.
+    segmenting is configured. Raises if a case has more than one segment
+    value: splitting it would cut its trace apart (``validate`` reports the
+    same condition as ``segment_varies_within_case``).
     """
     if "segment" not in df.columns:
         return {"<all>": df}
+    mixed = segment_mixed_cases(df)
+    if mixed:
+        raise ValueError(
+            f"{len(mixed)} case(s) have more than one segment value (e.g. {mixed[:3]}); "
+            "segment_by must name a case-level attribute"
+        )
     segments: dict[str, pd.DataFrame] = {}
     for value, group in df.groupby("segment", dropna=False):
         key = "<missing>" if pd.isna(value) else str(value)

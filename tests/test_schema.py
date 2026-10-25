@@ -52,6 +52,24 @@ def test_assert_canonical_schema_rejects_unsorted_data(canonical_log: pd.DataFra
         assert_canonical_schema(shuffled)
 
 
+def test_unsorted_detection_covers_each_condition(canonical_log: pd.DataFrame) -> None:
+    clean = _clean_subset(canonical_log)
+    # Cases out of order, events within each case in order.
+    cases_swapped = pd.concat([clean.iloc[3:], clean.iloc[:3]]).reset_index(drop=True)
+    with pytest.raises(ValueError, match="not sorted"):
+        assert_canonical_schema(cases_swapped)
+    # Cases in order, two events of c1 swapped.
+    events_swapped = clean.iloc[[1, 0, 2, 3, 4, 5]].reset_index(drop=True)
+    with pytest.raises(ValueError, match="not sorted"):
+        assert_canonical_schema(events_swapped)
+
+
+def test_timestamp_ties_in_source_order_count_as_sorted(canonical_log: pd.DataFrame) -> None:
+    c5 = canonical_log[canonical_log["case_id"] == "c5"].reset_index(drop=True)
+    assert_canonical_schema(c5)  # B and C tie; either order is canonical
+    assert_canonical_schema(c5.iloc[[0, 2, 1]].reset_index(drop=True))
+
+
 def test_sort_canonical_is_stable_on_timestamp_ties(canonical_log: pd.DataFrame) -> None:
     """Checks c5 (B and C tied at the same timestamp).
 
