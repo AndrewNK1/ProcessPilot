@@ -67,3 +67,26 @@ def test_default_cache_dir_honours_env_override(
 ) -> None:
     monkeypatch.setenv("PP_CACHE_DIR", str(tmp_path))
     assert default_cache_dir() == tmp_path
+
+
+def test_extends_inherits_blocks_and_child_blocks_replace_whole() -> None:
+    sample, full = load_preset_yaml("bpi2019_sample"), load_preset_yaml("bpi2019")
+    assert sample["conformance_rules"] == full["conformance_rules"]
+    assert sample["source"] == {"type": "file", "path": "data/sample/bpi2019_sample.csv"}
+    assert "path_env" not in sample["source"]  # replaced, not deep-merged
+    assert "extends" not in sample
+
+
+def test_extends_cycle_is_reported(tmp_path: Path) -> None:
+    a, b = tmp_path / "a.yaml", tmp_path / "b.yaml"
+    a.write_text(f"extends: {b.as_posix()}\nname: a\n", encoding="utf-8")
+    b.write_text(f"extends: {a.as_posix()}\nname: b\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="cycle"):
+        load_preset_yaml(a)
+
+
+def test_committed_source_path_resolves_from_the_project_root() -> None:
+    path = resolve_source_path(load_preset_yaml("bpi2019_sample"))
+    assert path == find_project_root() / "data" / "sample" / "bpi2019_sample.csv"
+    with pytest.raises(FileNotFoundError, match="missing file"):
+        resolve_source_path({"source": {"path": "data/sample/nope.csv"}})

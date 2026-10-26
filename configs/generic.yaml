@@ -1,0 +1,59 @@
+# ---------------------------------------------------------------------------
+# Base preset for an uploaded log with no dataset preset of its own.
+#
+# The column mapping comes from the analyst (confirmed in the app), so this
+# file has no `mapping` and no `source`. It holds only dataset-agnostic
+# defaults: the same discovery/analysis settings as bpi2019.yaml, no
+# conformance rules, no domain knowledge, no protected activities, and a
+# cleaning suggestion that removes nothing (the analyst decides).
+# ---------------------------------------------------------------------------
+name: generic
+description: >-
+  Dataset-agnostic defaults for an uploaded event log: no conformance rules,
+  no domain knowledge, nothing removed unless the analyst chooses to.
+
+timestamp_timezone_policy: utc
+
+validation:
+  max_distinct_activities_warn: 200
+  min_events_per_case_warn: 2
+
+suggested_cleaning_policy:
+  drop_cases_with_missing_values: false
+  drop_cases_with_out_of_range_timestamps: false
+  drop_single_event_cases: false
+  drop_exact_duplicate_events: false
+
+discovery:
+  inductive_miner_noise_threshold: 0.2
+  dfg_min_edge_frequency_share: 0.01
+
+analysis:
+  top_n_bottlenecks: 15
+  top_n_variants: 10
+  top_n_rework: 10
+  top_n_resources: 15
+  top_n_handovers: 10
+  top_n_activity_waits: 10
+  top_n_model_deviations: 10
+  max_example_cases: 5
+
+variant_filter:
+  mode: none
+
+reference_models:
+  default: null
+
+preprocessing:
+  collapse_same_instant_repeats: true
+
+case_completion:
+  end_activities: []
+
+conformance_rules: []
+
+domain_knowledge: null
+
+redesign:
+  protected_activities: []
+  constraints_text: []

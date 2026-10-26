@@ -1,0 +1,25 @@
+# ---------------------------------------------------------------------------
+# Application settings: FastAPI backend + Streamlit front end.
+#
+# Paths are not configured here: runs go to outputs/runs (PP_RUNS_DIR) and
+# the API's own state (SQLite index, uploads) to outputs/app (PP_APP_DIR).
+# ---------------------------------------------------------------------------
+api:
+  host: 127.0.0.1
+  port: 8000
+  # Background jobs (profiling, validation, mining, agent runs) run in this
+  # many threads. 1 on purpose: mining is CPU-bound, and one worker never has
+  # two jobs writing the same run's checkpoint database at once.
+  job_workers: 1
+  # Largest accepted upload. Streamlit's own uploader limit is set to match
+  # in scripts/run_app.ps1 (--server.maxUploadSize, in MB).
+  max_upload_mb: 1024
+
+ui:
+  # Overridden by PP_API_URL.
+  api_url: http://127.0.0.1:8000
+  # How often a page waiting on a background job asks the API for news.
+  poll_seconds: 1.0
+  # Seconds before the UI gives up on one HTTP request (jobs are not bound by it).
+  request_timeout_seconds: 30
+  bpmn_height_px: 420

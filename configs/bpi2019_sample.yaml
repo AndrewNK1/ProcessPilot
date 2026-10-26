@@ -1,0 +1,18 @@
+# ---------------------------------------------------------------------------
+# Dataset preset: the committed BPI Challenge 2019 sample (data/sample/).
+#
+# 200 cases per item category, cut by scripts/make_bpi_sample.py. Everything
+# except the source is inherited from bpi2019.yaml via `extends`, so the
+# sample is mined with exactly the full dataset's rules and thresholds.
+# Used by the end-to-end tests and as the quick first run of the app.
+# ---------------------------------------------------------------------------
+extends: bpi2019
+name: bpi2019_sample
+description: >-
+  Deterministic 800-case sample of BPI Challenge 2019 (200 per item
+  category), committed with the repository. Mines in seconds.
+
+source:
+  type: file
+  # Relative to the project root; only for files committed with the project.
+  path: data/sample/bpi2019_sample.csv

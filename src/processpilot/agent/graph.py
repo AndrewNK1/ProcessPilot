@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
@@ -52,6 +53,8 @@ from processpilot.process_tree import TreeNode, labels
 from processpilot.redesign.bpmn_edit import load_tree
 
 CHECKPOINT_FILE = "checkpoints.sqlite"
+
+NodeCallback = Callable[[str], None]
 
 
 def build_graph(ctx: AgentContext, checkpointer: Any = None) -> CompiledStateGraph:
@@ -141,6 +144,18 @@ def model_id_from_env(settings: AgentSettings) -> str:
     return model_id
 
 
+def create_llm(model_id: str, settings: AgentSettings, run_dir: Path) -> StructuredLLM:
+    """The model behind ``model_id``; ``mock`` is the rule-based stand-in.
+
+    Anything else is a ``provider:model`` id for ``init_chat_model``.
+    """
+    from processpilot.llm.mock import MOCK_MODEL_ID, MockLLM
+
+    if model_id == MOCK_MODEL_ID:
+        return MockLLM(run_dir)
+    return LangChainLLM(model_id, settings.model)
+
+
 def _new_agent_run_id(segment_dir: Path) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     candidate, n = stamp, 1
@@ -174,7 +189,7 @@ class AgentRunner:
         self.catalogue = catalogue or load_heuristics()
         self.domain = domain or load_domain_knowledge(preset.get("domain_knowledge"))
         self.store = EvidenceStore.from_json(self.run_dir / "evidence.json")
-        self.llm = llm or LangChainLLM(model_id_from_env(self.settings), self.settings.model)
+        self.llm = llm or create_llm(model_id_from_env(self.settings), self.settings, self.run_dir)
         self._saver, self._conn = open_checkpointer(self.run_dir / CHECKPOINT_FILE)
 
     def __enter__(self) -> AgentRunner:
@@ -228,29 +243,59 @@ class AgentRunner:
     def _config(segment: str, agent_run_id: str) -> dict[str, Any]:
         return {"configurable": {"thread_id": f"{segment_slug(segment)}:{agent_run_id}"}}
 
-    def start(self, segment: str, constraints: Constraints | None = None) -> tuple[str, AgentState]:
+    def new_agent_run_id(self, segment: str) -> str:
+        """A fresh, unused agent run id for ``segment`` (for callers that index it first)."""
+        return _new_agent_run_id(self.run_dir / segment_slug(segment))
+
+    def _drive(
+        self, segment: str, agent_run_id: str, payload: Any, on_node: NodeCallback | None
+    ) -> None:
+        """Run the graph until it pauses or ends, reporting each finished node.
+
+        ``stream`` instead of ``invoke`` so a caller (the API's job) can show
+        progress during a multi-minute run; both execute the graph the same way.
+        """
+        graph = self._graph(segment, agent_run_id)
+        for chunk in graph.stream(
+            payload, self._config(segment, agent_run_id), stream_mode="updates"
+        ):
+            if on_node is not None:
+                for name in chunk:
+                    if not name.startswith("__"):
+                        on_node(name)
+
+    def start(
+        self,
+        segment: str,
+        constraints: Constraints | None = None,
+        agent_run_id: str | None = None,
+        on_node: NodeCallback | None = None,
+    ) -> tuple[str, AgentState]:
         """Run until the review interrupt (or failure). Returns (agent_run_id, state)."""
-        agent_run_id = _new_agent_run_id(self.run_dir / segment_slug(segment))
+        agent_run_id = agent_run_id or self.new_agent_run_id(segment)
         initial = AgentState(
             run_id=self.run_id,
             agent_run_id=agent_run_id,
             segment=segment,
             constraints=constraints or self.default_constraints(),
         )
-        self._graph(segment, agent_run_id).invoke(initial, self._config(segment, agent_run_id))
+        self._drive(segment, agent_run_id, initial, on_node)
         return agent_run_id, self.state(segment, agent_run_id)
 
     def resume(
-        self, segment: str, agent_run_id: str, decision: ReviewDecision | dict[str, Any]
+        self,
+        segment: str,
+        agent_run_id: str,
+        decision: ReviewDecision | dict[str, Any],
+        on_node: NodeCallback | None = None,
     ) -> AgentState:
         """Resume a paused run with the analyst's decision."""
         payload = ReviewDecision.model_validate(
             decision.model_dump() if isinstance(decision, ReviewDecision) else decision
         ).model_dump()
-        config = self._config(segment, agent_run_id)
         if not self.pending_review(segment, agent_run_id):
             raise RuntimeError(f"run {agent_run_id} of {segment!r} is not awaiting review")
-        self._graph(segment, agent_run_id).invoke(Command(resume=payload), config)
+        self._drive(segment, agent_run_id, Command(resume=payload), on_node)
         return self.state(segment, agent_run_id)
 
     def state(self, segment: str, agent_run_id: str) -> AgentState:

@@ -1,0 +1,58 @@
+<!doctype html>
+<!--
+  Streamlit component: read-only BPMN viewer (bpmn-js navigated viewer, zoom + pan).
+
+  WHY hand-written instead of streamlit-component-lib: the component protocol is
+  three postMessage types (componentReady, render, setFrameHeight), and the npm
+  helper would add a build step to a Python project. Everything is served from
+  this folder, so the viewer works offline.
+
+  The bpmn.io watermark is part of bpmn-js and must stay visible (LICENSE-bpmn-js).
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="diagram-js.css">
+  <link rel="stylesheet" href="bpmn-js.css">
+  <style>
+    html, body { margin: 0; padding: 0; font-family: sans-serif; }
+    #canvas { width: 100%; box-sizing: border-box; border: 1px solid #d0d4da; border-radius: 6px; background: #fff; }
+    #error { display: none; padding: 8px; color: #b00020; font-size: 14px; }
+  </style>
+  <script src="bpmn-navigated-viewer.production.min.js"></script>
+</head>
+<body>
+  <div id="canvas"></div>
+  <div id="error"></div>
+  <script>
+    const canvasEl = document.getElementById("canvas");
+    const errorEl = document.getElementById("error");
+    const viewer = new BpmnJS({ container: canvasEl });
+    let shownXml = null;
+
+    function send(type, data) {
+      window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
+    }
+
+    window.addEventListener("message", async (event) => {
+      const msg = event.data;
+      if (!msg || msg.type !== "streamlit:render") return;
+      const height = msg.args.height;
+      canvasEl.style.height = height + "px";
+      send("streamlit:setFrameHeight", { height: height + 30 });
+      if (msg.args.xml === shownXml) return;
+      shownXml = msg.args.xml;
+      try {
+        await viewer.importXML(shownXml);
+        viewer.get("canvas").zoom("fit-viewport", "auto");
+        errorEl.style.display = "none";
+      } catch (err) {
+        errorEl.textContent = "Could not display the model: " + err.message;
+        errorEl.style.display = "block";
+      }
+    });
+
+    send("streamlit:componentReady", { apiVersion: 1 });
+  </script>
+</body>
+</html>

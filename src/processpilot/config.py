@@ -22,6 +22,8 @@ from dotenv import load_dotenv
 _PROJECT_MARKER = "pyproject.toml"
 _CONFIGS_DIRNAME = "configs"
 _CACHE_DIR_ENV = "PP_CACHE_DIR"
+_RUNS_DIR_ENV = "PP_RUNS_DIR"
+_APP_DIR_ENV = "PP_APP_DIR"
 
 
 def find_project_root(start: Path | str | None = None) -> Path:
@@ -62,6 +64,18 @@ def default_cache_dir() -> Path:
     return find_project_root() / "data" / "processed"
 
 
+def default_runs_dir() -> Path:
+    """Where mining runs go: ``$PP_RUNS_DIR`` or ``<root>/outputs/runs``."""
+    override = os.environ.get(_RUNS_DIR_ENV)
+    return Path(override) if override else find_project_root() / "outputs" / "runs"
+
+
+def default_app_dir() -> Path:
+    """The API's own state (SQLite index, uploads): ``$PP_APP_DIR`` or ``<root>/outputs/app``."""
+    override = os.environ.get(_APP_DIR_ENV)
+    return Path(override) if override else find_project_root() / "outputs" / "app"
+
+
 def resolve_preset_path(name_or_path: Path | str) -> Path:
     """Accept either a preset name (``"bpi2019"``) or a path to a YAML file."""
     as_path = Path(name_or_path)
@@ -74,13 +88,24 @@ def resolve_preset_path(name_or_path: Path | str) -> Path:
     return resolved
 
 
-def load_preset_yaml(name_or_path: Path | str) -> dict[str, Any]:
-    """Parse a dataset preset YAML into a dict. The only YAML reader for presets."""
-    path = resolve_preset_path(name_or_path)
+def load_preset_yaml(name_or_path: Path | str, _chain: tuple[Path, ...] = ()) -> dict[str, Any]:
+    """Parse a dataset preset YAML into a dict. The only YAML reader for presets.
+
+    ``extends: <preset>`` inherits every top-level block of another preset;
+    a block the child names replaces the parent's block whole (no deep merge).
+    WHY: the committed BPI sample must use exactly the full dataset's rules,
+    and a copied rule list would silently drift from the original.
+    """
+    path = resolve_preset_path(name_or_path).resolve()
+    if path in _chain:
+        raise ValueError(f"preset 'extends' cycle: {' -> '.join(p.name for p in (*_chain, path))}")
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"preset {path} must be a YAML mapping, got {type(raw).__name__}")
-    return raw
+    base = raw.pop("extends", None)
+    if base is None:
+        return raw
+    return {**load_preset_yaml(base, (*_chain, path)), **raw}
 
 
 def load_config_yaml(*parts: str) -> dict[str, Any]:
@@ -99,7 +124,11 @@ def load_config_yaml(*parts: str) -> dict[str, Any]:
 
 
 def resolve_source_path(preset: dict[str, Any]) -> Path:
-    """Turn a preset's ``source.path_env`` into an existing file path.
+    """Turn a preset's ``source.path_env`` (or ``source.path``) into an existing file path.
+
+    ``path_env`` names an environment variable, for machine-specific files
+    outside the repo. ``path`` is relative to the project root and only meant
+    for files committed with the project (the BPI sample in ``data/sample``).
 
     Fails loudly with the variable's name, because "file not found" without
     saying *which setting* produced the path is the most common setup error on
@@ -107,8 +136,13 @@ def resolve_source_path(preset: dict[str, Any]) -> Path:
     """
     source = preset.get("source") or {}
     env_var = source.get("path_env")
+    if not env_var and source.get("path"):
+        committed = find_project_root() / Path(source["path"])
+        if not committed.is_file():
+            raise FileNotFoundError(f"source.path points at a missing file: {committed}")
+        return committed
     if not env_var:
-        raise ValueError("preset has no source.path_env; cannot locate the input file")
+        raise ValueError("preset has no source.path_env or source.path; cannot locate the input")
     value = os.environ.get(env_var)
     if not value:
         raise OSError(

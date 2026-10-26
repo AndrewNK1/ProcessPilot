@@ -25,10 +25,41 @@ python -m pip install -e ".[dev,ui]"
 
 # 3. Point the tool at your data and model
 Copy-Item .env.example .env   # then edit .env
+
+# 4. Graphviz (BPMN layout and pictures), a system program, not a pip package
+winget install --id Graphviz.Graphviz   # then add C:\Program Files\Graphviz\bin to PATH
 ```
 
-`.env` is gitignored. The raw event log stays outside the repository; only its
-path is configured, via `PP_BPI2019_PATH`.
+`.env` is gitignored. Set `PP_MODEL` to `anthropic:claude-opus-5-5` (with
+`ANTHROPIC_API_KEY`) for the real model, or to `mock` to run everything without
+a key (rule-based stand-in, every output marked `[mock]`). Without Graphviz the
+pipeline still runs, but BPMN diagrams have no layout.
+
+## Run the app
+
+```powershell
+.\scripts\run_app.ps1
+```
+
+This starts the FastAPI backend (`http://127.0.0.1:8000`, interactive docs at
+`/docs`, log in `outputs\app\api.log`) and then the Streamlit app, which opens
+in the browser. Ctrl+C stops both. To run them separately:
+
+```powershell
+.\.venv\python.exe -m processpilot.api
+.\.venv\python.exe -m streamlit run src\processpilot\app\streamlit_app.py
+```
+
+A first run in under a minute: page **Data** -> preset `bpi2019_sample` ->
+*Check data quality* -> *Mine this log*; page **Evidence**; page **Redesign** ->
+*Run the agent* (model `mock` works without a key) -> approve or reject with a
+comment.
+
+The Streamlit app only talks to the API. The API keeps a SQLite index
+(`outputs\app\processpilot.sqlite`) of datasets, runs, background jobs and
+agent runs, and the log of every analyst decision; evidence, models and agent
+logs stay in the run folders under `outputs\runs`. Runs mined in notebooks show
+up in the app automatically.
 
 ## Checks
 
@@ -46,7 +77,14 @@ pytest
 | `src/processpilot/mining/` | deterministic analysis + evidence store |
 | `src/processpilot/agent/` | LangGraph pipeline (reasoning only) |
 | `src/processpilot/redesign/` | typed edit ops, BPMN editing, impact estimate |
-| `configs/` | dataset presets and the redesign heuristics catalogue |
+| `src/processpilot/process_tree.py` | editable process tree, BPMN rendering with stable ids |
+| `src/processpilot/pipeline.py` | ingest -> validate -> clean -> mine, shared by API and notebooks |
+| `src/processpilot/llm/` | rule-based mock model (`PP_MODEL=mock`) |
+| `src/processpilot/api/` | FastAPI backend, background jobs, SQLite index + decision log |
+| `src/processpilot/app/` | Streamlit front end (calls the API only), vendored bpmn-js viewer |
+| `configs/` | dataset presets, heuristics catalogue, agent and app settings |
+| `data/sample/` | committed 800-case BPI 2019 sample (preset `bpi2019_sample`) |
+| `scripts/` | `run_app.ps1` (start API + app), `make_bpi_sample.py` |
 | `notebooks/` | per-phase evaluation notebooks |
 
 ## Design principles
@@ -73,8 +111,11 @@ pytest
 ## Dataset
 
 Evaluated on the [BPI Challenge 2019](https://data.4tu.nl/articles/_/12715853)
-purchase-to-pay log (1,595,923 events / 251,734 cases). The raw file is **not**
-in this repository — point `PP_BPI2019_PATH` at your own copy.
+purchase-to-pay log (1,595,923 events / 251,734 cases). The pipeline reads the
+XES from the path in `PP_BPI2019_PATH`. For convenience the original download,
+`BPI_Challenge_2019.zip`, is committed (unzip it outside the repo and point the
+variable at the `.xes`). `data/sample/` holds a deterministic 800-case sample
+(200 per item category) that mines in seconds; see `data/sample/README.md`.
 
 ## License note
 
