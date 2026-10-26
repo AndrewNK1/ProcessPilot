@@ -220,6 +220,7 @@ class _BpmnBuilder:
         from pm4py.objects.bpmn.obj import BPMN
 
         self.B = BPMN
+        self.process_id = process_id
         self.bpmn = BPMN(process_id=process_id)
         self._nodes: dict[str, Any] = {}
         self._flows: set[tuple[str, str]] = set()
@@ -235,7 +236,9 @@ class _BpmnBuilder:
         if key in self._flows:
             return
         self._flows.add(key)
-        self.bpmn.add_flow(self.B.SequenceFlow(src, dst, id=f"flow__{key[0]}__{key[1]}"))
+        self.bpmn.add_flow(
+            self.B.SequenceFlow(src, dst, id=f"flow__{key[0]}__{key[1]}", process=self.process_id)
+        )
 
     def task_id(self, label: str) -> str:
         base = f"task_{_slug(label)}"
@@ -254,6 +257,7 @@ class _BpmnBuilder:
                 gateway_direction=direction.CONVERGING
                 if role in ("join", "loop_entry")
                 else direction.DIVERGING,
+                process=self.process_id,
             )
         )
 
@@ -262,7 +266,13 @@ class _BpmnBuilder:
         if tree.is_silent:
             return src
         if tree.is_leaf:
-            task = self.add(self.B.Task(id=self.task_id(tree.label), name=tree.display_name()))  # type: ignore[arg-type]
+            task = self.add(
+                self.B.Task(
+                    id=self.task_id(tree.label),  # type: ignore[arg-type]
+                    name=tree.display_name(),
+                    process=self.process_id,
+                )
+            )
             self.connect(src, task)
             return task
         kids = [(c, f"{path}_{i}") for i, c in enumerate(tree.children)]
@@ -291,8 +301,8 @@ class _BpmnBuilder:
 def to_bpmn(tree: TreeNode, process_id: str = "process") -> BPMN:
     """Render a tree as a pm4py BPMN object with deterministic element ids."""
     b = _BpmnBuilder(process_id)
-    start = b.add(b.B.NormalStartEvent(id="start", name="start"))
-    end = b.add(b.B.NormalEndEvent(id="end", name="end"))
+    start = b.add(b.B.NormalStartEvent(id="start", name="start", process=process_id))
+    end = b.add(b.B.NormalEndEvent(id="end", name="end", process=process_id))
     b.connect(b.emit(tree, "n", start), end)
     return b.bpmn
 
@@ -302,17 +312,58 @@ def graphviz_available() -> bool:
     return shutil.which("dot") is not None
 
 
+def _strip_blank_text(element: Any) -> None:
+    for child in list(element.childNodes):
+        if child.nodeType == child.TEXT_NODE and not child.data.strip():
+            element.removeChild(child)
+        elif child.nodeType == child.ELEMENT_NODE:
+            _strip_blank_text(child)
+
+
+def canonical_bpmn_xml(xml: bytes, process_id: str) -> bytes:
+    """pm4py's exported BPMN XML in a byte-stable form.
+
+    WHY: pm4py's exporter writes nodes and flows in set order (object hashes,
+    so it changes between runs) and gives the diagram and its plane fresh
+    random ids on every write, so the same tree never produced the same file.
+    Element order inside a process or plane carries no meaning in BPMN, so
+    sorting by tag and id loses nothing; edges sort before shapes, which also
+    makes renderers draw arrows underneath tasks.
+    """
+    from xml.dom import minidom
+
+    doc = minidom.parseString(xml)
+    _strip_blank_text(doc.documentElement)
+    for tag in ("bpmn:process", "bpmndi:BPMNPlane"):
+        for parent in doc.getElementsByTagName(tag):
+            children = list(parent.childNodes)
+            for child in children:
+                parent.removeChild(child)
+            for child in sorted(children, key=lambda c: (c.tagName, c.getAttribute("id"))):
+                parent.appendChild(child)
+    for tag, suffix in (("bpmndi:BPMNDiagram", "diagram"), ("bpmndi:BPMNPlane", "plane")):
+        for i, element in enumerate(doc.getElementsByTagName(tag)):
+            element.setAttribute("id", f"id{process_id}_{suffix}" + (f"_{i}" if i else ""))
+    return doc.toprettyxml(encoding="utf-8")
+
+
 def write_bpmn(tree: TreeNode, path: Path, process_id: str = "process") -> bool:
     """Write the tree as BPMN XML; returns whether a Graphviz layout was applied.
 
-    Without Graphviz the model is still complete and re-readable, but every
-    shape sits at (0, 0); callers record which happened.
+    The same tree always gives the same bytes (see ``canonical_bpmn_xml``), so
+    BPMN files can be diffed between runs like the evidence. Without Graphviz
+    the model is still complete and re-readable, but every shape sits at
+    (0, 0); callers record which happened.
     """
-    import pm4py
+    from pm4py.objects.bpmn.exporter.variants import etree as bpmn_exporter
+    from pm4py.objects.bpmn.layout import layouter
 
     layout = graphviz_available()
+    bpmn = to_bpmn(tree, process_id)
+    if layout:
+        bpmn = layouter.apply(bpmn)
     path.parent.mkdir(parents=True, exist_ok=True)
-    pm4py.write_bpmn(to_bpmn(tree, process_id), str(path), auto_layout=layout)
+    path.write_bytes(canonical_bpmn_xml(bpmn_exporter.get_xml_string(bpmn), process_id))
     return layout
 
 

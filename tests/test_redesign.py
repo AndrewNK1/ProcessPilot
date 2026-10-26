@@ -12,6 +12,7 @@ Every expected tree and number below is worked out by hand on two fixtures:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -157,6 +158,25 @@ def test_tree_json_and_bpmn_file_round_trip(tree: TreeNode, tmp_path: Path) -> N
     write_bpmn(tree, tmp_path / "t.bpmn")
     read = pm4py.read_bpmn(str(tmp_path / "t.bpmn"))
     assert {"task_a", "task_e"} <= {n.get_id() for n in read.get_nodes()}
+
+
+def test_bpmn_file_is_byte_identical_on_rewrite(tmp_path: Path) -> None:
+    # pm4py writes set-ordered elements and fresh uuid4 diagram/plane ids; one of
+    # each operator gives the set order room to differ.
+    t = node(
+        "sequence",
+        leaf("A"),
+        node("xor", leaf("B"), leaf(None)),
+        node("parallel", leaf("C"), leaf("D")),
+        node("loop", leaf("E"), leaf("F")),
+    )
+    write_bpmn(t, tmp_path / "1.bpmn", process_id="as_is")
+    write_bpmn(t, tmp_path / "2.bpmn", process_id="as_is")
+    text = (tmp_path / "1.bpmn").read_text(encoding="utf-8")
+    assert (tmp_path / "1.bpmn").read_bytes() == (tmp_path / "2.bpmn").read_bytes()
+    # No random ids left, including pm4py's per-interpreter default process id.
+    assert not re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", text)
+    assert 'id="idas_is"' in text and 'id="idas_is_diagram"' in text
 
 
 # --- operations -------------------------------------------------------------------
