@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="64" height="64">
-  <!-- ProcessPilot mark: a path that steps down, the wait ladder in miniature. -->
-  <rect x="1" y="1" width="26" height="26" rx="7" fill="#DDEDEE"/>
-  <path d="M7 9 H12 V14 H17 V19 H21" fill="none" stroke="#0B6E77" stroke-width="2.2"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="7" cy="9" r="2" fill="#0B6E77"/>
-  <circle cx="21" cy="19" r="2" fill="#0B6E77"/>
-</svg>

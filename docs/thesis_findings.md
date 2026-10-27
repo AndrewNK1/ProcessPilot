@@ -3,7 +3,13 @@
 Source material for the Methodology, Results and Limitations chapters. Every
 item is a measured fact or a recorded decision from the build, with where it
 comes from. Numbers are from BPI Challenge 2019 unless stated otherwise.
-Last updated: 2026-10-27 (UI design phase: themes, wait ladder).
+Last updated: 2026-10-27 (front end replaced: Streamlit -> React web app; see 5c).
+
+**Read first for the Methodology chapter.** The analyst-facing front end is a
+React web app served by the FastAPI backend (section 5c). An earlier Streamlit
+front end existed during development and was discarded on 2026-10-27; section
+5b documents it only as design history. Describe the system as built: data and
+evidence pipeline (sections 1-5), API and decision log (5a), web app (5c).
 
 ---
 
@@ -217,8 +223,9 @@ inside a choice).
 
 ## 5a. Application architecture (app phase)
 
-**Three layers, one direction.** Streamlit (what the analyst sees) talks only
-to a FastAPI backend over HTTP; the backend calls the same pipeline functions
+**Three layers, one direction.** The web app (what the analyst sees; React
+since 2026-10-27, Streamlit before, see 5c) talks only to a FastAPI backend over
+HTTP; the backend calls the same pipeline functions
 the notebooks use (`pipeline.py`, `AgentRunner`). Why a backend at all: the
 review step is a paused LangGraph run that may be resumed hours later, and
 mining and agent runs take minutes, so long-lived state (background jobs,
@@ -264,10 +271,10 @@ rework; propose automation of the activity with the leading wait, elimination
 of the most repeated non-protected activity, and automation of the target of
 the top bottleneck, each trial-applied to the model.
 
-**BPMN display offline.** bpmn-js 18.31.0 (navigated viewer) is vendored, so
-the app needs no network except for the LLM call. As-is and to-be models are
-shown side by side; because element ids are stable, the same task has the
-same id in both.
+**BPMN display offline.** bpmn-js (navigated viewer; 18.31.1 since the React
+app, bundled into the build) needs no network, so the app needs none except
+for the LLM call. As-is and to-be models are shown stacked full width; because
+element ids are stable, the same task has the same id in both.
 
 **Findings while building it.**
 - pm4py 2.7 looks up its parent process name (psutil) when first imported and
@@ -281,11 +288,17 @@ same id in both.
   the case id after cleaning) mines in about 7 s into 275 evidence items, so
   the full app flow can be tested end to end in the automated suite.
 
-## 5b. User interface design (UI design phase)
+## 5b. User interface design, first iteration (Streamlit; superseded by 5c)
+
+> Superseded on 2026-10-27: this Streamlit front end and its visual design
+> (petrol teal, IBM Plex, wait ladder widgets) were removed. Kept as design
+> history. What carried over: the analyst-first framing, the per-path wait
+> computation (`mining/paths.py` and its API route, now drawn as the
+> itinerary), the no-default decision control, and stacked BPMN models.
 
 **Users first, demo second** (user decision). The UI is designed for an SME
 business analyst in long desktop sessions; the thesis demo benefits from that.
-Streamlit was kept (user decision) so the API client and tests stay valid; the
+Streamlit was kept at that point (user decision) so the API client and tests stayed valid; the
 look comes from Streamlit's own theme config (light and dark), vendored IBM Plex
 fonts, and custom components v2 that render in the page and read the theme's
 CSS variables, so light and dark need no second set of styles.
@@ -314,13 +327,74 @@ reading size) with the changed tasks outlined.
 
 **Human in the loop, enforced in the form.** The approve/reject control has no
 default; submitting without a choice keeps the typed comment and asks again
-(tested in `tests/test_app_ui.py`).
+(then tested in `tests/test_app_ui.py`, removed with Streamlit; the React
+form keeps the behaviour, see 5c).
 
 **Accessibility.** WCAG AA contrast checked for every token in both modes. One
 trade-off found: Streamlit always puts white labels on primary buttons, so dark
 mode's primary teal must stay deep (#1A7F88, 4.73:1 with white), which is under
 4.5:1 as text on the dark ground; selected segment and tab labels therefore use
 the ink colour, and a brighter teal (#3CB4BE) carries data in dark mode.
+
+## 5c. Web front end (replaces Streamlit, 2026-10-27)
+
+**Why Streamlit was replaced** (user decision). The Streamlit UI looked dated
+to the user, and its limits were structural rather than cosmetic: every
+interaction re-runs the whole page script; layout is limited to Streamlit's
+own containers; the theme could not be switched from code (the Light/Dark
+switch had to write Streamlit's private browser-storage key and reload);
+primary buttons always carry white labels, which forced a too-dark accent in
+dark mode; and custom visuals needed a component protocol per widget. The
+backend already exposed everything over HTTP (5a), so only the presentation
+layer changed: the pipeline, the API contract, the agent and the decision log
+are untouched, and all API tests still pass unchanged.
+
+**Architecture.** React 19 + TypeScript, built with Vite (`web/`). The build is
+written into the Python package (`src/processpilot/api/static`) and committed,
+and the FastAPI process serves it from the same origin as the API: one
+process, one port, no CORS, and the app runs with Python alone (Node is needed
+only to change the UI). Client routes (`/data`, `/evidence/<run>/<segment>`,
+`/redesign/<run>/<segment>?agent=<id>`) are answered with the app shell, so
+every view has an address that can be bookmarked or shared. Server state is
+fetched with TanStack Query; background jobs (profile, validate, mine, agent
+start/resume) are polled at `poll_seconds` from `configs/app.yaml` (served by
+`GET /settings/ui`). The browser stores only conveniences (appearance, last
+run and segment, the analyst's name); nothing the method depends on.
+
+**Same method, same guarantees.** The UI computes no metric and never sees
+raw events: every number comes from the API (evidence, path waits, ESTIMATE),
+and the itinerary only arranges the API's per-step waits (`web/src/journey.ts`).
+The Data screen keeps the method's order as four coupons that open one after
+the other (event log, column mapping, data quality, clean and mine); nothing
+is removed unless the analyst ticks it. Each evidence ID is shown wherever it
+is cited, with its code-written summary. The decision control has no default,
+submitting without a choice keeps the comment, each review round starts with
+an empty form, and the decision is logged before the agent resumes.
+
+**Design process.** The visual direction was chosen in a structured design
+round (Impeccable skill): candidate visual worlds were derived from the
+audience's own world, a random roll assigned one, catalogue challengers were
+weighed against it, and the user chose from first-screen sketches. The user
+re-rolled once and then picked "Ticket Wallet", with the palette refined at
+the user's request. Result: the method is a coupon book whose legs open in
+order; a case path is an itinerary whose layovers are the waits; each proposal
+is a coupon whose ESTIMATE is torn off on a pale "carbon copy" stub, labelled
+ESTIMATE; decisions stamp the run, and rejected rounds stay in the log, voided.
+Ink navy, carbon-copy cobalt on data, one signal red for stamps and bad news;
+Archivo in two widths; light and dark modes. Recorded in `DESIGN.md`.
+
+**Verification.** Python: `tests/test_web_app.py` (shell on every client
+route, assets, API routes unaffected, settings endpoint, an unbuilt checkout
+explains how to build) plus the unchanged API suite. TypeScript: type check
+and vitest unit tests for the itinerary logic and number formatting. In a real
+browser (Playwright, Chromium): upload of the sample CSV -> profiling ->
+mapping -> quality report -> mining -> evidence; and on the mock model:
+agent started from the UI -> submit without a choice (comment kept) -> reject
+with comment -> revised round with an empty form -> approve -> two log entries
+(one voided, one approved). Screens checked at 1440, 768 and 390 px in light
+and dark; automated design checks (taste inspector, Impeccable detector) pass
+with 0 failures. The browser walk-throughs were run by hand with Playwright;
+they are not part of the automated test suite.
 
 ## 6. Limitations to state
 
@@ -344,11 +418,13 @@ the ink colour, and a brighter teal (#3CB4BE) carries data in dark mode.
   the API process.
 - The analyst approves or rejects the set of 2-3 proposals as a whole; there
   is no per-proposal choice in the graph.
-- Streamlit has no API to switch the theme: the Light/Dark switch stores the
-  choice where Streamlit's settings menu keeps it and reloads the page (the
-  current run, segment and path are carried over in the URL).
-- The wait ladder shows one variant at a time; cases on rare paths (outside the
+- The itinerary shows one variant at a time; cases on rare paths (outside the
   top-10 variants) are only in the tables.
+- The web app's end-to-end flows were verified in a browser by hand
+  (Playwright); the automated suite covers the API, the serving of the app and
+  the UI's logic, not clicks through the screens.
+- The built front end is committed next to its source; a UI change that is not
+  rebuilt leaves the served app behind the source.
 
 ## 7. Tools and environment
 
@@ -356,9 +432,14 @@ Python 3.11.17; pm4py 2.7.23.11 (AGPL v3); pandas 3.0.6; pydantic 2.14.1;
 LangGraph 1.2.15; langchain 1.4.6; langchain-anthropic 1.7.6; PuLP 3.3.2
 (capped below 4.0: pm4py uses APIs that PuLP 4.0 removes); Graphviz 16.1.0
 (needed for BPMN layout and pictures). Exact set in `requirements.lock`.
-FastAPI 0.162.0, uvicorn 0.54.0, Streamlit 1.66.0, bpmn-js 18.31.0 (vendored).
+FastAPI 0.162.0, uvicorn 0.54.0. Web app: React 19.3.1, TypeScript 7.0.2,
+Vite 8.3.5, React Router 7.18.4, TanStack Query 5.105.0, bpmn-js 18.31.1,
+lucide-react 1.62.0, Archivo (OFL, via @fontsource-variable/archivo 5.3.0),
+vitest 5.0.5; built with Node 24.11.0 (exact set in `web/package-lock.json`).
+Streamlit 1.66.0 was used until 2026-10-27 and has been uninstalled.
 Runtime: mining all four BPI segments takes about 1.5 min (largest segment
-about 59 s); the 800-case sample about 7 s. Tests: 295 automated tests on
+about 59 s); the 800-case sample about 7 s. Tests: 301 automated Python tests
+(plus 7 TypeScript unit tests for the web app's logic) on
 hand-built logs with known answers and on the committed sample (including the
 API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 2019 tests are opt-in.
@@ -383,7 +464,11 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | App phase | A rule-based mock model is built (no-key runs, evaluation baseline) |
 | App phase | bpmn-js is vendored so the app works offline |
 | UI phase | Analysts are the primary user; the demo is secondary |
-| UI phase | Stay on Streamlit; light and dark mode with a visible sidebar switch |
-| UI phase | Petrol teal accent, IBM Plex Sans (vendored, offline) |
-| UI phase | Signature element: value-stream wait ladder (per-path mean waits) |
+| UI phase | Stay on Streamlit; light and dark mode with a visible sidebar switch (superseded by "Front end" rows) |
+| UI phase | Petrol teal accent, IBM Plex Sans (vendored, offline) (superseded by "Front end" rows) |
+| UI phase | Signature element: value-stream wait ladder (per-path mean waits) (superseded by "Front end" rows) |
 | UI phase | BPMN diagrams follow the dark theme; the bpmn.io watermark stays visible |
+| Front end | Replace Streamlit entirely (its limits made the design look dated) |
+| Front end | React + TypeScript + Vite; build committed and served by FastAPI (no Node to run) |
+| Front end | New visual identity; nothing kept from the Streamlit look; Linear as quality bar |
+| Front end | Visual world "Ticket Wallet" chosen after one re-roll; palette refined (no purple) |

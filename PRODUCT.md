@@ -40,9 +40,11 @@ LLM only interprets precomputed evidence. Every claim cites a stable evidence ID
 
 ## Capabilities and Constraints
 
-- Streamlit front end calling a FastAPI backend only (`src/processpilot/app/`); no direct data
-  access from the UI.
-- Must work offline: fonts, scripts and the bpmn-js viewer are vendored; no CDN at runtime.
+- Web front end (React + TypeScript + Vite in `web/`), built into `src/processpilot/api/static`
+  and served by the FastAPI backend from the same origin; it calls the HTTP API only, with no
+  direct data access. It replaced the Streamlit front end on 2026-10-27 (user decision).
+- Must work offline: fonts, scripts and the bpmn-js viewer are bundled into the build; no CDN at
+  runtime. Node is needed only to change the UI, never to run it.
 - The bpmn.io watermark in the BPMN viewer must stay visible (bpmn-js licence).
 - Light and dark mode, switchable from a visible control; defaults to the OS setting.
 - Dataset-agnostic: nothing BPI-specific in the UI outside data it receives.
@@ -51,8 +53,11 @@ LLM only interprets precomputed evidence. Every claim cites a stable evidence ID
 ## Brand Commitments
 
 - Name: ProcessPilot. No existing logo; a simple mark is drawn for it (replaceable).
-- Accent: petrol teal (user decision, 2026-10-27).
-- Typeface: IBM Plex Sans, with IBM Plex Mono for evidence IDs (user decision, 2026-10-27).
+- Visual world: "Ticket Wallet" (user choice in the 2026-10-27 direction round): ink navy coupon
+  heads, carbon-copy cobalt for data and the ESTIMATE, one warm signal red for stamps; palette
+  refined from the dealt card at the user's request (no purple). The earlier petrol teal + IBM
+  Plex direction was discarded with Streamlit.
+- Typeface: Archivo (variable, two widths); no monospace.
 - Voice: plain, factual, evidence-first; never hype. Estimates are always called estimates.
 
 ## Evidence on Hand

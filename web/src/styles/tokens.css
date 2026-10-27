@@ -1,0 +1,131 @@
+/* ProcessPilot tokens: the ticket wallet.
+   Coupon-white stock on a cool shell, ink-navy text and coupon heads,
+   carbon-copy cobalt on figures and on the ESTIMATE copy, one warm signal red
+   for stamps and bad news, green only for approved and sound.
+   Light is the default; dark follows the OS unless the analyst picks one. */
+
+:root {
+  color-scheme: light;
+  --ground: #ffffff;
+  --shell: #f5f6f9;
+  --raised: #f8f9fb;
+  --active: #e7eaf2;
+  --ink: #101b3a;
+  --muted: #4e5873;
+  --faint: #5a6378;
+  --edge: #dde2eb;
+  --rule: #eceff4;
+  --control: #c4cbd8;
+
+  --head: #13234d;
+  --head-ink: #ffffff;
+  --head-muted: #b9c3dc;
+  --mark: #13234d;
+
+  --primary: #13234d;
+  --primary-hover: #1d3266;
+  --primary-ink: #ffffff;
+
+  --carbon: #2f4fb5;
+  --carbon-soft: #9fb2ea;
+  --carbon-sheet: #eef2fd;
+  --carbon-edge: #c9d4f4;
+
+  --signal: #c63a2a;
+  --signal-sheet: #fdefec;
+  --go: #16784f;
+  --go-sheet: #e6f4ed;
+  --notice: #8a5300;
+  --notice-sheet: #fff4e0;
+
+  --focus: #2f4fb5;
+  --selection: rgba(47, 79, 181, 0.2);
+  --scrim: rgba(16, 27, 58, 0.32);
+
+  --font: "Archivo Variable", "Archivo", system-ui, sans-serif;
+  --fs-meta: 12px;
+  --fs-small: 13px;
+  --fs-body: 14px;
+  --fs-section: 16px;
+  --fs-figure: 24px;
+  --fs-title: 26px;
+
+  --r-coupon: 3px;
+  --r-control: 5px;
+  --gap: 16px;
+  --pad: 20px;
+  --control-h: 34px;
+  --shell-w: 240px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e1015;
+    --shell: #12151b;
+    --raised: #161a22;
+    --active: #1f2430;
+    --ink: #e8ecf4;
+    --muted: #a6afc4;
+    --faint: #8e97ad;
+    --edge: #262c38;
+    --rule: #1c212b;
+    --control: #3a4254;
+    --head: #1c2d5e;
+    --head-ink: #f3f5fa;
+    --head-muted: #b3bfdd;
+    --mark: #93abf6;
+    --primary: #e8ecf4;
+    --primary-hover: #ffffff;
+    --primary-ink: #0e1015;
+    --carbon: #93abf6;
+    --carbon-soft: #4a5f9c;
+    --carbon-sheet: #161e36;
+    --carbon-edge: #2c3a66;
+    --signal: #ff7b69;
+    --signal-sheet: #2c1714;
+    --go: #52cc99;
+    --go-sheet: #11251c;
+    --notice: #f2b556;
+    --notice-sheet: #2a2010;
+    --focus: #93abf6;
+    --selection: rgba(147, 171, 246, 0.28);
+    --scrim: rgba(0, 0, 0, 0.55);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e1015;
+  --shell: #12151b;
+  --raised: #161a22;
+  --active: #1f2430;
+  --ink: #e8ecf4;
+  --muted: #a6afc4;
+  --faint: #8e97ad;
+  --edge: #262c38;
+  --rule: #1c212b;
+  --control: #3a4254;
+  --head: #1c2d5e;
+  --head-ink: #f3f5fa;
+  --head-muted: #b3bfdd;
+  --mark: #93abf6;
+  --primary: #e8ecf4;
+  --primary-hover: #ffffff;
+  --primary-ink: #0e1015;
+  --carbon: #93abf6;
+  --carbon-soft: #4a5f9c;
+  --carbon-sheet: #161e36;
+  --carbon-edge: #2c3a66;
+  --signal: #ff7b69;
+  --signal-sheet: #2c1714;
+  --go: #52cc99;
+  --go-sheet: #11251c;
+  --notice: #f2b556;
+  --notice-sheet: #2a2010;
+  --focus: #93abf6;
+  --selection: rgba(147, 171, 246, 0.28);
+  --scrim: rgba(0, 0, 0, 0.55);
+}

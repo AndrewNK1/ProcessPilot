@@ -1,6 +1,6 @@
 """The ``DataSource`` abstract base class.
 
-WHY an ABC rather than a function per format: the Streamlit app and the agent
+WHY an ABC rather than a function per format: the web app and the agent
 pipeline must be able to accept a source they cannot inspect. ``describe()``
 exists so a run log can record provenance (what was read, how big it was)
 without the caller needing to know the concrete type.

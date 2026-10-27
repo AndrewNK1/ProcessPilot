@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Workshop Wall</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
+<style>
+:root{--g:#fff;--side:#f7f5f1;--ink:#1a1a1a;--mut:#5c5852;--bd:#e7e2da;--rule:#efebe5;--wall:#ede3d3;
+--step:#f6d74a;--pain:#f29bb5;--idea:#8fcb7e;--act:#ece7df}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:14px/20px "Bricolage Grotesque",sans-serif;color:var(--ink);background:var(--g);display:grid;grid-template-columns:232px 1fr}
+.num{font-variant-numeric:tabular-nums}
+aside{background:var(--side);padding:20px 12px;display:flex;flex-direction:column;gap:2px}
+.brand{display:flex;gap:10px;align-items:center;padding:0 8px 20px;font-weight:800;font-size:16px}
+.brand i{width:20px;height:20px;background:var(--step);position:relative}.brand i::after{content:"";position:absolute;right:-5px;bottom:-5px;width:11px;height:11px;background:var(--pain)}
+.nav{padding:7px 10px;border-radius:6px;color:var(--mut)}.nav.on{background:var(--act);color:var(--ink);font-weight:600}
+.grp{margin:22px 10px 6px;font-size:12px;color:var(--mut)}
+.scope{padding:6px 10px}.scope span{display:block;font-size:12px;color:var(--mut)}
+main{padding:28px 40px;display:flex;flex-direction:column;gap:20px}
+.top{display:flex;justify-content:space-between;align-items:flex-end}
+h1{font-size:28px;line-height:34px;font-weight:750;letter-spacing:-.015em}
+.find{color:var(--mut);font-size:15px;margin-top:6px}.find b{color:var(--ink);font-weight:600}
+.segs{display:flex;gap:4px;background:var(--side);padding:3px;border-radius:8px}.seg{padding:5px 12px;border-radius:6px;font-size:13px;color:var(--mut)}.seg.on{background:#fff;color:var(--ink);font-weight:600;box-shadow:0 0 0 1px var(--bd)}
+.kpi{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--bd);border-radius:8px}
+.kpi div{padding:12px 18px;border-left:1px solid var(--bd)}.kpi div:first-child{border:0}
+.kpi small{display:block;font-size:12px;color:var(--mut)}.kpi b{font-size:24px;line-height:32px;font-weight:600}.kpi em{font-style:normal;font-size:14px;color:var(--mut);margin-left:3px}
+.wall{background:var(--wall);border-radius:10px;padding:20px 24px 24px}
+.wh{display:flex;justify-content:space-between;margin-bottom:16px}.wh h2{font-size:17px;font-weight:700}.wh p{font-size:13px;color:var(--mut)}
+.key{display:flex;gap:14px;font-size:12px;color:var(--mut)}.key i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+.lane{display:grid;grid-template-columns:repeat(4,1fr);gap:40px;position:relative}
+.n{padding:12px 14px;min-height:76px;font-weight:600;font-size:15px;line-height:19px}
+.st{background:var(--step)}.st small{display:block;font-weight:400;font-size:12px;margin-top:6px}
+.lane .st{position:relative}.lane .st:not(:last-child)::after{content:"";position:absolute;right:-40px;top:38px;width:40px;height:2px;background:var(--ink)}
+.under{display:grid;grid-template-columns:repeat(4,1fr);gap:40px;margin-top:14px}
+.pn{background:var(--pain);font-weight:500;font-size:13px;line-height:18px;padding:10px 12px}
+.pn b{display:block;font-size:20px;line-height:26px;font-weight:700}
+.id{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;padding:0 5px;background:rgba(26,26,26,.1)}
+.col{display:flex;flex-direction:column;gap:10px}
+.low{display:grid;grid-template-columns:1fr 360px;gap:24px}
+.card{border:1px solid var(--bd);border-radius:8px;padding:16px 20px}
+h3{font-size:16px;font-weight:700;margin-bottom:8px}
+table{width:100%;border-collapse:collapse}td,th{padding:8px 0;border-top:1px solid var(--rule);text-align:left;font-weight:400}
+th{font-size:12px;color:var(--mut);border:0}td.r,th.r{text-align:right}
+.chip{display:inline-block;width:8px;height:8px;background:var(--pain);margin-right:8px}
+.btn{display:inline-block;background:var(--ink);color:#fff;padding:9px 14px;border-radius:6px;font-weight:600}
+.next p{color:var(--mut);margin-bottom:14px}
+</style></head><body>
+<aside>
+<div class="brand"><i></i>ProcessPilot</div>
+<div class="nav">Data</div><div class="nav on">Evidence</div><div class="nav">Redesign</div>
+<div class="grp">Scope</div>
+<div class="scope">BPI Challenge 2019<span>Run 20261025T215659Z</span></div>
+<div class="scope">2-way match<span>1 of 4 segments</span></div>
+</aside>
+<main>
+<div class="top"><div><h1>2-way match</h1>
+<p class="find">Cases wait longest for the vendor invoice after an approval change: <b>29.3 d median</b> in 19.9% of cases.</p></div>
+<div class="segs"><span class="seg on">2-way match</span><span class="seg">3-way after GR</span><span class="seg">3-way before GR</span><span class="seg">Consignment</span></div></div>
+<div class="kpi num"><div><small>Cases</small><b>1,044</b></div><div><small>Events</small><b>5,894</b></div><div><small>Median throughput</small><b>23.7</b><em>d</em></div><div><small>Mean throughput</small><b>57.5</b><em>d</em></div><div><small>Paths</small><b>149</b></div></div>
+<section class="wall">
+<div class="wh"><div><h2>The wall · path 3, 93 cases</h2><p>Steps in order; pain points stuck where they happen</p></div>
+<div class="key"><span><i style="background:var(--step)"></i>Step</span><span><i style="background:var(--pain)"></i>Pain point</span><span><i style="background:var(--idea)"></i>Idea</span></div></div>
+<div class="lane">
+<div class="n st">Change Approval for Purchase Order<small>start</small></div>
+<div class="n st">Create Purchase Order Item<small class="num">2.1 d mean wait</small></div>
+<div class="n st">Vendor creates invoice<small class="num">19.4 d mean wait</small></div>
+<div class="n st">Record Invoice Receipt<small class="num">1.6 d mean wait</small></div>
+</div>
+<div class="under num">
+<div class="col"><div class="pn"><b>42.9%</b>of cases repeat this approval, +52.8 d median<br><span class="id">RW-01</span></div></div>
+<div class="col"></div>
+<div class="col"><div class="pn"><b>29.3 d</b>median wait after an approval change, 19.9% of cases<br><span class="id">BN-01</span></div><div class="pn"><b>11.5 d</b>until the PO item, 40.8% of cases<br><span class="id">BN-02</span></div></div>
+<div class="col"></div>
+</div>
+</section>
+<div class="low">
+<div class="card"><h3>Ranked pain points</h3><table class="num"><tr><th>Where</th><th class="r">Cases</th><th class="r">Median wait</th><th class="r">ID</th></tr>
+<tr><td><i class="chip"></i>Approval change → Vendor creates invoice</td><td class="r">19.9%</td><td class="r">29.3 d</td><td class="r">BN-01</td></tr>
+<tr><td><i class="chip"></i>Vendor creates invoice → Create PO Item</td><td class="r">40.8%</td><td class="r">11.5 d</td><td class="r">BN-02</td></tr></table></div>
+<div class="card next"><h3>Next</h3><p>The agent reads these pain points and proposes ideas from the heuristic catalogue.</p><span class="btn">Diagnose and redesign</span></div>
+</div>
+</main></body></html>

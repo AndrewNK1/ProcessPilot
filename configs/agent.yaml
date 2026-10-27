@@ -35,6 +35,15 @@ model:
       temperature: 0
       seed: 42
       reasoning: false
+    # ChatGroq (langchain-groq 1.1.3), hosted on Groq, e.g.
+    # PP_MODEL=groq:openai/gpt-oss-120b. gpt-oss is a reasoning model;
+    # `reasoning_effort: high` for the same reason as Anthropic's `effort`.
+    # temperature 0 makes reruns closer, but Groq does not promise
+    # bit-identical output, so prompts and raw outputs are still logged.
+    groq:
+      reasoning_effort: high
+      temperature: 0
+      max_tokens: 16000
   # `json_schema` = the provider's native structured-output mode. Forced tool
   # calling ("function_calling") is rejected by Claude Opus 5.5 / Sonnet 5.5.
   structured_output_method: json_schema

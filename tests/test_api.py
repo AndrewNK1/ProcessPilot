@@ -1,6 +1,6 @@
 """The FastAPI backend end to end, through HTTP, with jobs run inline.
 
-WHY through HTTP and not the service directly: the contract the Streamlit app
+WHY through HTTP and not the service directly: the contract the web app (web/)
 relies on is the routes, status codes and JSON shapes. Jobs run inline
 (``inline_jobs=True``) so every request's effects are visible when it returns.
 

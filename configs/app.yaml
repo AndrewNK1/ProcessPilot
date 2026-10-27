@@ -1,5 +1,6 @@
 # ---------------------------------------------------------------------------
-# Application settings: FastAPI backend + Streamlit front end.
+# Application settings: one FastAPI process serves the API and the web app
+# (React, built from web/ into src/processpilot/api/static).
 #
 # Paths are not configured here: runs go to outputs/runs (PP_RUNS_DIR) and
 # the API's own state (SQLite index, uploads) to outputs/app (PP_APP_DIR).
@@ -11,15 +12,12 @@ api:
   # many threads. 1 on purpose: mining is CPU-bound, and one worker never has
   # two jobs writing the same run's checkpoint database at once.
   job_workers: 1
-  # Largest accepted upload. Streamlit's own uploader limit is set to match
-  # in scripts/run_app.ps1 (--server.maxUploadSize, in MB).
+  # Largest accepted upload, enforced by the API.
   max_upload_mb: 1024
 
+# Read by the web app through GET /settings/ui.
 ui:
-  # Overridden by PP_API_URL.
-  api_url: http://127.0.0.1:8000
-  # How often a page waiting on a background job asks the API for news.
+  # How often a screen waiting on a background job asks the API for news.
   poll_seconds: 1.0
-  # Seconds before the UI gives up on one HTTP request (jobs are not bound by it).
-  request_timeout_seconds: 30
+  # Height of the BPMN viewers (as-is and to-be models).
   bpmn_height_px: 420

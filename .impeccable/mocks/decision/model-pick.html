@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Referee Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{--g:#fff;--side:#f4f5f6;--ink:#15171a;--mut:#5a5f66;--bd:#e3e6e9;--red:#a4161a}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:15px/23px "Source Sans 3",sans-serif;color:var(--ink);background:var(--g);display:grid;grid-template-columns:232px 1fr 380px}
+aside{background:var(--side);padding:20px 12px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;padding:0 8px 20px}.nav{padding:7px 10px;border-radius:6px;color:var(--mut)}.nav.on{background:#e7e9ec;color:var(--ink);font-weight:600}
+main{padding:32px 48px;overflow:hidden}
+.meta{font-size:13px;color:var(--mut)}
+h1{font:600 28px/34px "Source Serif 4",serif;margin:6px 0 18px}
+h2{font-size:16px;font-weight:700;margin:20px 0 6px}
+p{max-width:640px}
+.c{color:var(--red);font-weight:600;font-size:13px}
+ol{padding-left:20px;max-width:640px}li{margin-bottom:6px}
+.refs{margin-top:20px;border-top:1px solid var(--bd);padding-top:12px;font-size:13px;line-height:19px;color:var(--mut);max-width:640px}
+.refs div{margin-bottom:6px}.refs b{color:var(--red);margin-right:6px}
+.form{border-left:1px solid var(--bd);padding:32px 24px;display:flex;flex-direction:column;gap:14px}
+.form h3{font-size:17px;font-weight:700}
+.opt{border:1px solid var(--bd);border-radius:6px;padding:10px 12px}.opt b{display:block}.opt span{font-size:13px;color:var(--mut)}
+.ta{border:1px solid #cfd4d9;border-radius:6px;height:120px;padding:10px;color:var(--mut);font-size:14px}
+.btn{background:var(--ink);color:#fff;padding:9px 14px;border-radius:6px;font-weight:600;text-align:center}
+.round{font-size:13px;color:var(--mut)}
+</style></head><body>
+<aside><div class="brand">ProcessPilot</div><div class="nav">Data</div><div class="nav">Evidence</div><div class="nav on">Redesign</div></aside>
+<main><div class="meta">Proposal 1 of 3 · round 1 · 2-way match · heuristic: task automation</div>
+<h1>Automate the change of approval for purchase orders</h1>
+<h2>Claim</h2>
+<p>Cases wait longest after an approval change <span class="c">[BN-01]</span>, and the change itself repeats in 42.9% of cases <span class="c">[RW-01]</span>. Automating the approval removes most of the manual wait before the vendor invoice.</p>
+<h2>Changes</h2><ol><li>Automate “Change Approval for Purchase Order”.</li></ol>
+<h2>Risks</h2><ol><li>Automated approval may let wrong orders through.</li><li>Vendors may still invoice late for reasons outside the process.</li></ol>
+<div class="refs"><div><b>[BN-01]</b>Transition occurs in 19.9% of cases (208) with a median wait of 29.3 days.</div><div><b>[RW-01]</b>Repeated within 42.9% of cases; those take a median 52.8 days longer.</div></div>
+</main>
+<div class="form"><h3>Referee decision</h3><p class="round">Applies to all 3 proposals of round 1. Nothing is executed.</p>
+<div class="opt"><b>Approve</b><span>Record the proposals as accepted</span></div>
+<div class="opt"><b>Reject with comments</b><span>The agent revises, 2 rounds left</span></div>
+<div class="ta">Comments to the agent</div><span class="btn">Submit decision</span></div>
+</body></html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Category standard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--g:#fff;--side:#f4f5f7;--ink:#111318;--mut:#5f6470;--bd:#e6e8ec;--a:#2f6feb}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:14px/20px Inter,sans-serif;color:var(--ink);background:var(--g);display:grid;grid-template-columns:232px 1fr}
+.num{font-variant-numeric:tabular-nums}
+aside{background:var(--side);padding:20px 12px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:600;padding:0 8px 18px}.nav{padding:6px 10px;border-radius:6px;color:var(--mut)}.nav.on{background:#e7e9ee;color:var(--ink)}
+main{padding:28px 40px;display:flex;flex-direction:column;gap:20px}
+h1{font-size:24px;font-weight:600}.sub{color:var(--mut)}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--bd);border-radius:8px}
+.kpi div{padding:14px 18px;border-left:1px solid var(--bd)}.kpi div:first-child{border:0}
+.kpi small{display:block;font-size:12px;color:var(--mut)}.kpi b{font-size:24px;line-height:32px;font-weight:500}
+.card{border:1px solid var(--bd);border-radius:8px;padding:18px 20px}
+h2{font-size:15px;font-weight:600;margin-bottom:12px}
+table{width:100%;border-collapse:collapse}td,th{padding:10px 0;border-top:1px solid var(--bd);text-align:left;font-weight:400}
+th{font-size:12px;color:var(--mut);border:0}td.n,th.n{text-align:right}
+.bar{height:6px;background:var(--a);border-radius:3px}
+.id{font-family:ui-monospace,monospace;font-size:12px;color:var(--mut)}
+</style></head><body>
+<aside><div class="brand">ProcessPilot</div><div class="nav">Data</div><div class="nav on">Evidence</div><div class="nav">Redesign</div></aside>
+<main><div><h1>Evidence</h1><p class="sub">2-way match · run 20261025T215659Z</p></div>
+<div class="kpi num"><div><small>Cases</small><b>1,044</b></div><div><small>Events</small><b>5,894</b></div><div><small>Median throughput</small><b>23.7 d</b></div><div><small>Mean throughput</small><b>57.5 d</b></div></div>
+<div class="card"><h2>Bottlenecks</h2><table class="num"><tr><th>ID</th><th>Transition</th><th>Cases</th><th class="n">Median wait</th></tr>
+<tr><td class="id">BN-01</td><td>Change Approval for PO → Vendor creates invoice</td><td><div class="bar" style="width:40px"></div></td><td class="n">29.3 d</td></tr>
+<tr><td class="id">BN-02</td><td>Vendor creates invoice → Create PO Item</td><td><div class="bar" style="width:82px"></div></td><td class="n">11.5 d</td></tr>
+<tr><td class="id">BN-03</td><td>Clear Invoice → Change Approval for PO</td><td><div class="bar" style="width:24px"></div></td><td class="n">35.4 d</td></tr>
+<tr><td class="id">BN-04</td><td>Record Invoice Receipt → Change Approval for PO</td><td><div class="bar" style="width:15px"></div></td><td class="n">22.0 d</td></tr>
+<tr><td class="id">BN-05</td><td>Record Invoice Receipt → Clear Invoice</td><td><div class="bar" style="width:52px"></div></td><td class="n">5.0 d</td></tr></table></div>
+</main></body></html>

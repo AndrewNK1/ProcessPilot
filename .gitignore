@@ -50,3 +50,8 @@ desktop.ini
 .taste-skill/
 .impeccable/review/
 .playwright-cli/
+
+# --- web app (web/) ---------------------------------------------------------
+# Dependencies are restored with `npm ci`; the build in src/processpilot/api/static
+# is committed on purpose, so the app runs with Python alone.
+web/node_modules/

@@ -2,7 +2,7 @@
 
 WHY a checkpointer is mandatory here: ``human_review`` uses LangGraph's
 ``interrupt()``, which can only resume if the state was persisted. The analyst
-may approve hours later, possibly from the Streamlit app rather than the
+may approve hours later, possibly from the web app rather than the
 notebook that started the run. The SQLite file lives at
 ``outputs/runs/<run_id>/checkpoints.sqlite``; each segment run is its own
 thread, ``<segment-slug>:<agent_run_id>``, so ``(segment, agent_run_id)`` is

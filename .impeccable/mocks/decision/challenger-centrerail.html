@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Centre-Rail Edition</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--g:#f3efe6;--ink:#141414;--mut:#5a564e;--v:#c2391b;--bd:#d8d1c4}
+*{box-sizing:border-box;margin:0}
+body{width:1440px;height:900px;overflow:hidden;font:17px/26px Newsreader,serif;color:var(--ink);background:var(--g);display:grid;grid-template-columns:220px 1fr}
+aside{padding:22px 14px;border-right:1px solid var(--bd);font:14px/20px Inter,sans-serif;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:600;padding:0 8px 20px}.nav{padding:7px 10px;color:var(--mut)}.nav.on{color:var(--ink);font-weight:600;border-left:2px solid var(--v)}
+main{display:grid;grid-template-columns:1fr 64px 1fr 360px;padding:40px 48px;gap:0 20px;align-content:start}
+h1{grid-column:1/4;font-size:30px;line-height:36px;font-weight:600;margin-bottom:22px}
+.col p{margin-bottom:14px}
+.rail{display:flex;flex-direction:column;align-items:center;gap:72px;padding-top:4px;border-left:1px solid var(--bd);border-right:1px solid var(--bd)}
+.rail b{font:600 12px Inter,sans-serif;color:var(--v)}
+.app{grid-row:2/4;grid-column:4;font:13px/19px Inter,sans-serif;color:var(--mut);padding-left:20px;border-left:1px solid var(--bd);display:flex;flex-direction:column;gap:18px}
+.app b{display:block;color:var(--v);font-weight:600}
+.dec{grid-column:1/4;margin-top:20px;font:14px Inter,sans-serif;display:flex;gap:10px}
+.dec span{border:1px solid var(--ink);padding:8px 14px}.dec span.p{background:var(--ink);color:#fff}
+</style></head><body>
+<aside><div class="brand">ProcessPilot</div><div class="nav">Data</div><div class="nav">Evidence</div><div class="nav on">Redesign</div></aside>
+<main><h1>Diagnosis · 2-way match</h1>
+<div class="col"><p>H1. Cases wait longest after an approval change: the vendor invoice follows a median 29.3 days later.</p><p>H2. The approval itself repeats in nearly half of all cases, and those cases run far longer.</p></div>
+<div class="rail"><b>BN-01</b><b>RW-01</b></div>
+<div class="col"><p>Alternative: vendors invoice late for commercial reasons the log cannot show.</p><p>Confidence is high for H1 and medium for H2.</p></div>
+<div class="app"><div><b>BN-01</b>Transition occurs in 19.9% of cases (208) with a median wait of 29.3 days.</div><div><b>RW-01</b>Repeated within 42.9% of cases (448); those take a median 52.8 days longer.</div></div>
+<div class="dec"><span class="p">Approve</span><span>Reject with comment</span></div>
+</main></body></html>

@@ -1,11 +1,16 @@
-"""FastAPI routes over ``Workspace``. Run with ``python -m processpilot.api``.
+"""FastAPI routes over ``Workspace``, and the web app. Run with ``python -m processpilot.api``.
 
 WHY the UI goes through HTTP instead of importing the pipeline: the agent's
 review step is a paused LangGraph run that may be resumed hours later, mining
 and agent runs take minutes, and both must survive a browser refresh. The
 backend owns those long-lived things (jobs, checkpoints, the decision log);
-Streamlit only displays them and sends the analyst's choices. The same
-endpoints serve scripts and tests.
+the web app (``web/``, React) only displays them and sends the analyst's
+choices. The same endpoints serve scripts and tests.
+
+The built web app lives in ``api/static`` (``npm run build`` in ``web/``) and
+is served from the same origin, so one process and one port run everything
+and the browser needs no CORS. Its client-side routes (``/data``,
+``/evidence/...``, ``/redesign/...``) all answer with ``index.html``.
 
 Slow steps return ``{"job_id": ...}`` at once; ``GET /jobs/{id}`` reports
 progress and the result. Errors: 404 unknown id, 409 wrong state (e.g. no
@@ -16,10 +21,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from processpilot.agent.state import Constraints, ReviewDecision
@@ -31,10 +38,17 @@ from processpilot.api.service import (
     Workspace,
     parse_mapping,
 )
-from processpilot.config import default_app_dir, default_runs_dir, load_env
+from processpilot.config import default_app_dir, default_runs_dir, load_config_yaml, load_env
 from processpilot.pipeline import CleaningPolicy
 
 _BPMN_MEDIA_TYPE = "application/xml"
+STATIC_DIR = Path(__file__).parent / "static"
+# Top-level paths owned by the web app's router; everything else is the API.
+_APP_ROUTES = ("data", "evidence", "redesign")
+_NOT_BUILT = """<!doctype html><meta charset="utf-8"><title>ProcessPilot</title>
+<p style="font-family:sans-serif;max-width:40em;margin:4em auto">The web app is not built.
+Run <code>npm install</code> and <code>npm run build</code> in <code>web/</code>, or use the
+API directly at <a href="/docs">/docs</a>.</p>"""
 
 
 class PresetDatasetRequest(BaseModel):
@@ -223,4 +237,41 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
     def decisions(run_id: str | None = None) -> list[dict[str, Any]]:
         return ws().all_decisions(run_id)
 
+    # --- the web app -----------------------------------------------------------
+
+    @app.get("/settings/ui")
+    def ui_settings() -> dict[str, Any]:
+        """How often the app polls a job and how tall it draws a BPMN model (app.yaml ``ui``)."""
+        ui = load_config_yaml("app.yaml")["ui"]
+        return {
+            "poll_seconds": float(ui["poll_seconds"]),
+            "bpmn_height_px": int(ui["bpmn_height_px"]),
+        }
+
+    _mount_web_app(app, STATIC_DIR)
     return app
+
+
+def _mount_web_app(app: FastAPI, static_dir: Path) -> None:
+    """Serve the built web app: hashed assets as files, every app route as ``index.html``."""
+    index = static_dir / "index.html"
+    if (static_dir / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+    def page() -> Response:
+        if index.is_file():
+            # The shell must never be cached: a rebuild changes the asset names it points to.
+            return FileResponse(index, headers={"Cache-Control": "no-cache"})
+        return HTMLResponse(_NOT_BUILT, status_code=503)
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    def favicon() -> Response:
+        icon = static_dir / "favicon.svg"
+        if not icon.is_file():
+            raise HTTPException(404, "no favicon")
+        return FileResponse(icon, media_type="image/svg+xml")
+
+    app.add_api_route("/", page, include_in_schema=False)
+    for route in _APP_ROUTES:
+        app.add_api_route(f"/{route}", page, include_in_schema=False)
+        app.add_api_route(f"/{route}/{{rest:path}}", page, include_in_schema=False)

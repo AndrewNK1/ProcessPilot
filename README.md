@@ -19,9 +19,9 @@ a stable evidence ID; claims citing unknown IDs are rejected and retried.
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# 2. Install, editable, with dev + UI extras
+# 2. Install, editable, with the dev extras (the web app is already built; no Node needed)
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev,ui]"
+python -m pip install -e ".[dev]"
 
 # 3. Point the tool at your data and model
 Copy-Item .env.example .env   # then edit .env
@@ -41,25 +41,22 @@ pipeline still runs, but BPMN diagrams have no layout.
 .\scripts\run_app.ps1
 ```
 
-This starts the FastAPI backend (`http://127.0.0.1:8000`, interactive docs at
-`/docs`, log in `outputs\app\api.log`) and then the Streamlit app, which opens
-in the browser. Ctrl+C stops both. To run them separately:
-
-```powershell
-.\.venv\python.exe -m processpilot.api
-.\.venv\python.exe -m streamlit run src\processpilot\app\streamlit_app.py
-```
+This starts one process, the FastAPI backend, which serves both the API
+(interactive docs at `/docs`) and the web app at `http://127.0.0.1:8000`, then
+opens the browser. Log: `outputs\app\api.log`. Ctrl+C stops it. Without the
+script: `.\.venv\python.exe -m processpilot.api`, then open the address.
 
 A first run in under a minute: page **Data** -> preset `bpi2019_sample` ->
 *Check data quality* -> *Mine this log*; page **Evidence**; page **Redesign** ->
 *Run the agent* (model `mock` works without a key) -> approve or reject with a
 comment.
 
-Light and dark mode: the switch at the foot of the sidebar (the first visit
-follows the operating system's setting). The look is documented in
-`DESIGN.md`; the theme itself lives in `src\processpilot\app\.streamlit\config.toml`.
+Light and dark mode: the switch at the foot of the sidebar (System follows
+the operating system). The look is documented in `DESIGN.md`; its tokens live
+in `web\src\styles\tokens.css`. Every screen has its own address (for example
+`/evidence/<run>/<segment>?path=3`), so a view can be bookmarked or shared.
 
-The Streamlit app only talks to the API. The API keeps a SQLite index
+The web app only talks to the API. The API keeps a SQLite index
 (`outputs\app\processpilot.sqlite`) of datasets, runs, background jobs and
 agent runs, and the log of every analyst decision; evidence, models and agent
 logs stay in the run folders under `outputs\runs`. Runs mined in notebooks show
@@ -70,7 +67,18 @@ up in the app automatically.
 ```powershell
 ruff check .
 pytest
+# web app (needs Node 22+): type check and unit tests
+cd web; npm ci; npm run check; npm test
 ```
+
+## Changing the web app
+
+The front end is React + TypeScript, built with Vite, in `web/` (see
+`web\README.md`). `npm run dev` serves it with hot reload on
+`http://localhost:5173` and forwards API calls to a running backend.
+`npm run build` writes the production build into
+`src\processpilot\api\static`, which is committed, so the app runs with Python
+alone; rebuild and commit it after every UI change.
 
 ## Layout
 
@@ -84,11 +92,11 @@ pytest
 | `src/processpilot/process_tree.py` | editable process tree, BPMN rendering with stable ids |
 | `src/processpilot/pipeline.py` | ingest -> validate -> clean -> mine, shared by API and notebooks |
 | `src/processpilot/llm/` | rule-based mock model (`PP_MODEL=mock`) |
-| `src/processpilot/api/` | FastAPI backend, background jobs, SQLite index + decision log |
-| `src/processpilot/app/` | Streamlit front end (calls the API only), vendored bpmn-js viewer |
+| `src/processpilot/api/` | FastAPI backend, background jobs, SQLite index + decision log; serves the built web app (`api/static`) |
+| `web/` | web app source: React + TypeScript + Vite, bpmn-js viewer (calls the API only) |
 | `configs/` | dataset presets, heuristics catalogue, agent and app settings |
 | `data/sample/` | committed 800-case BPI 2019 sample (preset `bpi2019_sample`) |
-| `scripts/` | `run_app.ps1` (start API + app), `make_bpi_sample.py` |
+| `scripts/` | `run_app.ps1` (start the app), `make_bpi_sample.py` |
 | `notebooks/` | per-phase evaluation notebooks |
 
 ## Design principles

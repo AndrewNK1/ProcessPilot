@@ -1,102 +1,203 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-27T12:00:00Z",
+  "generatedAt": "2026-10-27T15:00:00Z",
   "title": "Design System: ProcessPilot",
   "extensions": {
     "colorMeta": {
-      "petrol-teal": { "role": "primary", "displayName": "Petrol Teal", "canonical": "#0B6E77", "tonalRamp": ["#032a2e", "#06434a", "#0b6e77", "#2a8d95", "#5cabb1", "#93c9cd", "#c6e3e5", "#eaf5f6"] },
-      "petrol-teal-bright-dark": { "role": "primary", "displayName": "Bright Petrol (dark data hue)", "canonical": "#3CB4BE" },
-      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "#FFFFFF" },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#141A1B", "tonalRamp": ["#141a1b", "#2b3234", "#434b4d", "#566062", "#7a8385", "#a3aaab", "#d5dbdb", "#f3f5f5"] },
-      "canvas-dark": { "role": "neutral", "displayName": "Canvas (dark)", "canonical": "#111415" }
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink navy",
+        "canonical": "#101B3A"
+      },
+      "head": {
+        "role": "primary",
+        "displayName": "Coupon head navy",
+        "canonical": "#13234D"
+      },
+      "carbon": {
+        "role": "primary",
+        "displayName": "Carbon cobalt (data hue)",
+        "canonical": "#2F4FB5",
+        "tonalRamp": [
+          "#0f1a3d",
+          "#1b2d6b",
+          "#2f4fb5",
+          "#5c7ce0",
+          "#9fb2ea",
+          "#c9d4f4",
+          "#eef2fd"
+        ]
+      },
+      "carbon-dark": {
+        "role": "primary",
+        "displayName": "Carbon cobalt (dark)",
+        "canonical": "#93ABF6"
+      },
+      "signal": {
+        "role": "status",
+        "displayName": "Signal red (stamps, bad news)",
+        "canonical": "#C63A2A"
+      },
+      "go": {
+        "role": "status",
+        "displayName": "Go green (approved, sound)",
+        "canonical": "#16784F"
+      },
+      "notice": {
+        "role": "status",
+        "displayName": "Notice amber (awaiting decision)",
+        "canonical": "#8A5300"
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Coupon white",
+        "canonical": "#FFFFFF"
+      },
+      "shell": {
+        "role": "neutral",
+        "displayName": "Shell",
+        "canonical": "#F5F6F9"
+      },
+      "ground-dark": {
+        "role": "neutral",
+        "displayName": "Ground (dark)",
+        "canonical": "#0E1015"
+      }
     },
     "typographyMeta": {
-      "headline": { "displayName": "Headline", "purpose": "The page's one h1: a noun plus the segment." },
-      "figure": { "displayName": "Figure", "purpose": "KPI values, tabular figures." },
-      "evidence-id": { "displayName": "Evidence ID", "purpose": "Citable evidence and run ids only." }
+      "title": {
+        "displayName": "Title",
+        "purpose": "The page's one h1: a noun."
+      },
+      "coupon-head": {
+        "displayName": "Coupon head",
+        "purpose": "Condensed sentence case on the navy band."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "KPI values and layovers, tabular, in cobalt."
+      },
+      "evidence-id": {
+        "displayName": "Evidence ID",
+        "purpose": "Citable IDs on the carbon sheet."
+      },
+      "stamp": {
+        "displayName": "Stamp",
+        "purpose": "Decision and run states; the only capitals."
+      }
     },
     "shadows": [
-      { "name": "switch-selected", "value": "0 0 0 1px var(--st-border-color)", "purpose": "The selected option of the appearance switch; the only lifted element." }
+      {
+        "name": "menu-sheet",
+        "value": "0 12px 40px rgba(0,0,0,0.25)",
+        "purpose": "The phone menu sheet, the only floating surface."
+      }
     ],
     "motion": [
-      { "name": "control-feedback", "value": "120ms ease-out", "purpose": "Colour change on the appearance switch's hover and selection." }
+      {
+        "name": "control-feedback",
+        "value": "120ms",
+        "purpose": "Hover and press colour on legs, buttons, tabs."
+      },
+      {
+        "name": "sheet",
+        "value": "220ms cubic-bezier(0.16,1,0.3,1)",
+        "purpose": "Phone menu sheet slide."
+      },
+      {
+        "name": "disclosure",
+        "value": "160ms cubic-bezier(0.16,1,0.3,1)",
+        "purpose": "Disclosure chevron turn."
+      },
+      {
+        "name": "screen-enter",
+        "value": "0.45s expo.out, 8px rise, 0.2s total stagger",
+        "purpose": "Canvas sections settle in when the screen path changes (GSAP)."
+      },
+      {
+        "name": "itinerary-draw",
+        "value": "0.6-0.8s expo.out, clip-path left to right, 35ms stagger",
+        "purpose": "Layovers drawn in travel order (GSAP)."
+      },
+      {
+        "name": "estimate-depart",
+        "value": "0.9s expo.out, width from today's to the ESTIMATE's",
+        "purpose": "The ESTIMATE visibly departs from today (GSAP)."
+      },
+      {
+        "name": "stamp-landing",
+        "value": "0.42s back.out(1.6), scale 1.8 to 1",
+        "purpose": "A stamp lands when a decision or status arrives on screen; never on first view (GSAP)."
+      }
     ],
     "breakpoints": [
-      { "name": "phone", "value": "640px" },
-      { "name": "kpi-fold", "value": "720px" },
-      { "name": "gutter", "value": "900px" }
+      {
+        "name": "stack",
+        "value": "1180px"
+      },
+      {
+        "name": "shell-fold",
+        "value": "900px"
+      },
+      {
+        "name": "phone",
+        "value": "640px"
+      }
     ]
   },
   "components": [
     {
-      "name": "Primary Button",
-      "kind": "button",
-      "refersTo": "button-primary",
-      "description": "The one primary action of a form.",
-      "html": "<button class=\"ds-btn-primary\">Mine this log</button>",
-      "css": ".ds-btn-primary { background: #0B6E77; color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font: 500 15px/1.2 'IBM Plex Sans', sans-serif; transition: background 120ms ease-out; } .ds-btn-primary:hover { background: #0A5F67; } .ds-btn-primary:focus-visible { outline: 2px solid #0B6E77; outline-offset: 2px; }"
-    },
-    {
-      "name": "KPI Strip",
+      "name": "Coupon",
       "kind": "card",
-      "refersTo": "kpi-strip",
-      "description": "Headline figures in one divided container.",
-      "html": "<dl class=\"ds-kpi\"><div><dt>Cases</dt><dd>200</dd></div><div><dt>Median throughput</dt><dd>26.5<span>d</span></dd></div><div><dt>P90 throughput</dt><dd>190.1<span>d</span></dd></div></dl>",
-      "css": ".ds-kpi { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; border: 1px solid #D5DBDB; border-radius: 8px; font-family: 'IBM Plex Sans', sans-serif; color: #141A1B; } .ds-kpi > div { padding: 14px 18px; display: flex; flex-direction: column; } .ds-kpi > div + div { border-left: 1px solid #E3E7E7; } .ds-kpi dt { flex: 1; font-size: 13px; color: #4a5355; } .ds-kpi dd { margin: 4px 0 0; font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; } .ds-kpi dd span { font-size: 14px; font-weight: 400; color: #4a5355; margin-left: 3px; }"
-    },
-    {
-      "name": "Wait Ladder",
-      "kind": "custom",
-      "refersTo": "ladder-rung",
-      "description": "One path's steps; each mean wait starts where the previous one ended.",
-      "html": "<div class=\"ds-ladder\"><div class=\"r\"><span>Vendor creates invoice</span><i class=\"s\" style=\"left:0\"></i><b>start</b></div><div class=\"r\"><span>Create Purchase Order Item <code>BN-03</code></span><i style=\"left:0;width:70%\"></i><b>16.3 d</b></div><div class=\"r\"><span>Record Invoice Receipt</span><i style=\"left:72%;width:12%\"></i><b>2.4 d</b></div></div>",
-      "css": ".ds-ladder { font: 14px/20px 'IBM Plex Sans', sans-serif; color: #141A1B; } .ds-ladder .r { display: grid; grid-template-columns: 220px 1fr 70px; gap: 16px; align-items: center; height: 40px; position: relative; } .ds-ladder .r i { position: absolute; height: 12px; border-radius: 2px; background: #0B6E77; margin-left: 236px; max-width: calc(100% - 322px); } .ds-ladder .r i.s { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #0B6E77; background: #fff; } .ds-ladder b { grid-column: 3; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; } .ds-ladder code { font: 12px 'IBM Plex Mono', monospace; color: #0A5F67; }"
+      "refersTo": "coupon-head",
+      "description": "A method leg, a proposal or a decision: navy head band, stock edge, optional perforated stub.",
+      "html": "<section class=\"ds-coupon\"><header>Itinerary · path 2<span>16.5% of cases</span></header><div>…</div></section>",
+      "css": ".ds-coupon{border:1px solid #DDE2EB;border-radius:3px}.ds-coupon>header{display:flex;justify-content:space-between;background:#13234D;color:#fff;padding:6px 16px;font:680 14px 'Archivo Variable';font-variation-settings:'wdth' 80}.ds-coupon>header span{color:#B9C3DC;font-weight:400}.ds-coupon>div{padding:18px 20px}"
     },
     {
       "name": "Evidence ID",
-      "kind": "chip",
+      "kind": "tag",
       "refersTo": "evidence-id",
-      "description": "An inline citable ID.",
-      "html": "<code class=\"ds-id\">BN-01-2-way-match</code>",
-      "css": ".ds-id { font: 12px 'IBM Plex Mono', monospace; color: #0A5F67; background: #EDF3F3; padding: 1px 5px; border-radius: 4px; }"
+      "description": "A citable evidence ID; the full ID and its summary in the tooltip.",
+      "html": "<span class=\"ds-tag\" title=\"BN-01-2-way-match\">BN-01</span>",
+      "css": ".ds-tag{display:inline-flex;align-items:center;height:20px;padding:0 6px;border-radius:2px;background:#EEF2FD;color:#2F4FB5;font:650 12px 'Archivo Variable';font-variation-settings:'wdth' 82}"
     },
     {
-      "name": "Sidebar Nav Item",
-      "kind": "nav",
-      "description": "Page link; the active page is a neutral grey pill.",
-      "html": "<nav class=\"ds-nav\"><a>Data</a><a aria-current=\"page\">Evidence</a><a>Redesign</a></nav>",
-      "css": ".ds-nav { display: grid; gap: 2px; width: 220px; font: 15px 'IBM Plex Sans', sans-serif; } .ds-nav a { padding: 6px 10px; border-radius: 6px; color: #141A1B; cursor: pointer; } .ds-nav a:hover { background: #ECEFEF; } .ds-nav a[aria-current] { background: #E6EAEA; font-weight: 600; }"
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The screen's main action (Mine this log, Diagnose and redesign, Submit decision).",
+      "html": "<button class=\"ds-btn\">Submit decision</button>",
+      "css": ".ds-btn{height:34px;padding:0 14px;border-radius:5px;border:1px solid #13234D;background:#13234D;color:#fff;font:600 14px 'Archivo Variable'}.ds-btn:hover{background:#1D3266}.ds-btn:focus-visible{outline:2px solid #2F4FB5;outline-offset:2px}"
+    },
+    {
+      "name": "Stamp",
+      "kind": "badge",
+      "refersTo": "stamp",
+      "description": "Run and decision state, stamped: Awaiting decision, Approved, Void.",
+      "html": "<span class=\"ds-stamp\">Void</span>",
+      "css": ".ds-stamp{display:inline-flex;align-items:center;height:26px;padding:0 9px;border:2px solid #C63A2A;color:#C63A2A;border-radius:3px;font:780 12.5px 'Archivo Variable';font-variation-settings:'wdth' 76;letter-spacing:.08em;text-transform:uppercase}"
     }
   ],
   "narrative": {
-    "northStar": "The Value-Stream Worksheet",
-    "overview": "ProcessPilot reads like a lean value-stream worksheet put on a screen: the analyst's question is \"where do the days go?\", and the answer is drawn, not described. The interface is a working tool for long desktop sessions: noun titles, a finding line under every title, a divided KPI strip, ruled tables, flat surfaces, teal only on data and the one primary action.",
+    "northStar": "The Ticket Wallet",
+    "overview": "The analysis is a ticket wallet: the method is a coupon book whose legs tear off in order, a case path reads as an itinerary whose layovers are the waits, and every proposal is a coupon with fixed fields that the analyst's decision stamps; nothing disappears, it cancels.",
     "keyCharacteristics": [
-      "One hue family, petrol teal, on data and the primary action only.",
-      "IBM Plex Sans for everything; IBM Plex Mono for evidence IDs and nothing else.",
-      "Flat at rest: 1px borders and tone steps, no shadows on resting surfaces.",
-      "Every claim sits beside the evidence it cites; estimates are always labelled ESTIMATE.",
-      "True neutral darks; no navy, no slate."
+      "Navy coupon heads in Archivo's condensed width; the open leg is navy.",
+      "Carbon-copy cobalt on figures, layover bars, evidence IDs and the ESTIMATE copy.",
+      "The ESTIMATE torn off below a perforation on a pale cobalt carbon sheet.",
+      "Signal red only for stamps and bad news; green only for approved and sound.",
+      "Flat at rest; light and dark as equals; true near-black dark ground."
     ],
     "rules": [
-      { "name": "The Data-Not-Chrome Rule", "body": "Teal marks data and the one primary action of a form. Navigation, tabs and selected segments keep ink labels; their selection shows as a tint, a border or an underline.", "section": "colors" },
-      { "name": "The Two-Teal Rule", "body": "Dark mode uses two teals: a deep one under white labels, a bright one for data and text. Never set the deep one as text on the dark ground (under 4.5:1).", "section": "colors" },
-      { "name": "The Cite-In-Mono Rule", "body": "Monospace appears only on evidence IDs and run ids; numbers use Plex Sans tabular figures.", "section": "typography" },
-      { "name": "The Flat-At-Rest Rule", "body": "A border or a tone step, never both, and never a shadow on a panel.", "section": "elevation" }
-    ],
-    "dos": [
-      "Do put the answer to the page's question in its biggest block (the ladder on Evidence).",
-      "Do write one finding line under each title, with its evidence ID.",
-      "Do keep every number right-aligned in tabular figures, with its unit in secondary ink.",
-      "Do label every projected number ESTIMATE and draw it dashed.",
-      "Do leave the decision empty until the analyst chooses Approve or Reject."
-    ],
-    "donts": [
-      "Don't put teal on navigation, tab labels or selected segment labels.",
-      "Don't add shadows to panels, gradients to surfaces, or icons in tinted tiles.",
-      "Don't use a dark or saturated sidebar, or a navy or slate dark theme.",
-      "Don't set monospace on anything but evidence and run ids.",
-      "Don't hide or dim the bpmn.io watermark."
+      {
+        "name": "The Carbon-Is-Data Rule",
+        "body": "Cobalt marks data and the ESTIMATE copy; chrome keeps ink labels."
+      },
+      {
+        "name": "The Nothing-Disappears Rule",
+        "body": "Rejected rounds stay in the decision log, voided, never deleted."
+      }
     ]
   }
 }
