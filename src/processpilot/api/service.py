@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
+import pandas as pd
 from pydantic import ValidationError
 
 from processpilot.agent.catalogue import load_agent_settings
@@ -47,13 +48,16 @@ from processpilot.config import (
 )
 from processpilot.ingest.mapping import ColumnMapping, suggest_mapping
 from processpilot.mining.evidence import EvidenceStore
-from processpilot.mining.run import new_run_id
+from processpilot.mining.paths import path_waits
+from processpilot.mining.run import CASE_WAITS_FILE, new_run_id
 from processpilot.pipeline import (
     DATA_QUALITY_FILE,
     CleaningPolicy,
+    RecommendationSettings,
     clean_log,
     load_canonical,
     mine_log,
+    recommend_cleaning,
     suggested_cleaning_policy,
     validate_log,
 )
@@ -354,9 +358,17 @@ class Workspace:
             canonical = load_canonical(FileSource(record["source_path"]), mapping)
             progress("checking data quality")
             report = validate_log(canonical, preset)
+            progress("working out the recommended cleaning (dry run of each option)")
+            recommendation = recommend_cleaning(
+                canonical, report, preset, RecommendationSettings.load()
+            )
             _write_json(
                 self._dataset_dir(dataset_id) / QUALITY_FILE,
-                {"mapping": mapping.model_dump(), "report": report.model_dump(mode="json")},
+                {
+                    "mapping": mapping.model_dump(),
+                    "report": report.model_dump(mode="json"),
+                    "recommendation": recommendation.model_dump(),
+                },
             )
             return {
                 "event_count": report.event_count,
@@ -537,6 +549,25 @@ class Workspace:
         if not path.is_file():
             raise NotFound(f"run {run_id} has no as-is model for {slug!r}")
         return path.read_text(encoding="utf-8")
+
+    def variant_waits(self, run_id: str, slug: str, rank: int) -> dict[str, Any]:
+        """Step-by-step waits of the cases on variant ``rank`` (the UI's wait ladder).
+
+        The path is the one the variant evidence item lists, so the ladder and
+        the evidence it is read beside always describe the same cases.
+        """
+        _, run_dir, name = self._segment(run_id, slug)
+        store = EvidenceStore.from_json(run_dir / slug / "evidence.json")
+        item = next(
+            (i for i in store.query(name, "variant") if i.metrics.get("rank") == rank), None
+        )
+        if item is None:
+            raise NotFound(f"segment {slug!r} has no variant of rank {rank}")
+        waits_file = run_dir / slug / CASE_WAITS_FILE
+        if not waits_file.is_file():
+            raise NotFound(f"run {run_id} has no per-event waits for {slug!r}")
+        result = path_waits(pd.read_parquet(waits_file), item.metrics["activities"])
+        return {"evidence_id": item.id, **result.model_dump()}
 
     # --- agent runs ----------------------------------------------------------
 

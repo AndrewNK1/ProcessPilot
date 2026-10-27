@@ -74,6 +74,14 @@ def test_bpi_sample_from_preset_to_approved_redesign(client: TestClient) -> None
     assert quality["case_count"] == 800
     suggested = client.get(f"/datasets/{ds['id']}").json()["suggested_cleaning"]
     assert suggested["drop_cases_with_out_of_range_timestamps"] is True
+    advice = {
+        a["option"]: a
+        for a in client.get(f"/datasets/{ds['id']}").json()["quality"]["recommendation"]["advice"]
+    }
+    # The sample was cut from cleaned cases: no junk dates, so no removal is recommended.
+    assert not advice["drop_cases_with_out_of_range_timestamps"]["recommended"]
+    assert advice["drop_exact_duplicate_events"]["rows_removed"] > 0  # batch postings
+    assert not advice["drop_exact_duplicate_events"]["recommended"]
 
     mined = _job(client, client.post(f"/datasets/{ds['id']}/runs", json=suggested))
     run_id = mined["result"]["run_id"]
@@ -91,6 +99,13 @@ def test_bpi_sample_from_preset_to_approved_redesign(client: TestClient) -> None
     bottlenecks = client.get(f"/runs/{run_id}/segments/{slug}/evidence?type=bottleneck").json()
     assert bottlenecks and bottlenecks[0]["id"] == f"BN-01-{slug}"
     assert "task_" in client.get(f"/runs/{run_id}/segments/{slug}/as-is.bpmn").text
+    variant = client.get(f"/runs/{run_id}/segments/{slug}/evidence?type=variant").json()[1]
+    ladder = client.get(f"/runs/{run_id}/segments/{slug}/variants/2/waits").json()
+    assert ladder["evidence_id"] == variant["id"]
+    assert ladder["activities"] == variant["metrics"]["activities"]
+    assert ladder["case_count"] == variant["metrics"]["case_count"]
+    assert ladder["median_throughput_seconds"] == variant["metrics"]["median_throughput_seconds"]
+    assert client.get(f"/runs/{run_id}/segments/{slug}/variants/999/waits").status_code == 404
     model = client.get(f"/runs/{run_id}/segments/{slug}/model").json()
     assert model["default_constraints"]["protected_activities"] == ["Clear Invoice"]
 
@@ -217,6 +232,7 @@ def test_unknown_ids_are_404_and_never_reach_the_filesystem(tmp_path: Path) -> N
         assert client.get("/runs/..%2F..%2Fapp").status_code == 404
         assert client.get(f"/runs/{run_id}/segments/..%2Fx/evidence").status_code == 404
         assert client.get(f"/runs/{run_id}/segments/nope/evidence").status_code == 404
+        assert client.get(f"/runs/{run_id}/segments/..%2Fx/variants/1/waits").status_code == 404
         assert client.get(f"/runs/{run_id}/segments/{SLUG}/agent-runs/x").status_code == 404
         assert client.get("/datasets/x").status_code == 404
         assert client.get("/jobs/x").status_code == 404

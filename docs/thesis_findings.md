@@ -3,7 +3,7 @@
 Source material for the Methodology, Results and Limitations chapters. Every
 item is a measured fact or a recorded decision from the build, with where it
 comes from. Numbers are from BPI Challenge 2019 unless stated otherwise.
-Last updated: 2026-10-26 (app phase: FastAPI, SQLite, Streamlit).
+Last updated: 2026-10-27 (UI design phase: themes, wait ladder).
 
 ---
 
@@ -240,6 +240,20 @@ report (which changes nothing) -> tick the cleaning steps (the preset's
 suggestion is only the default) -> mine. Every removal is written to the run's
 `data_quality.json`.
 
+**Cleaning recommendation.** For each cleaning option ProcessPilot gives a
+recommendation computed by code from the dataset itself: each option is
+dry-run alone, and fixed rules turn the exact counts into a recommendation and
+a written reason. Position encoded: remove data only when keeping it would
+distort waits or throughput; keep real behaviour; refuse removals above 5% of
+events, because they point to a wrong mapping, timestamp format or date range
+rather than bad data; remove single-event cases only when they exceed 5% of
+cases (each counts as zero throughput). The analyst starts from it and can
+override every option. On full BPI 2019 the recommendation equals the
+preset's suggestion: remove the 80 cases (2,494 events, 0.2%) with dates
+outside 2017-01-01 to 2020-05-01; keep the 2,835 single-event cases (1.1%)
+and the 180,755 exact duplicate events (11.3%, batch postings already
+collapsed for flow analysis).
+
 **Mock model as a baseline.** `PP_MODEL=mock` is a rule-based stand-in behind
 the same interface as the LLM: it reads the same evidence, its output passes
 the same validators, and every text is marked `[mock]`. It lets the whole
@@ -267,6 +281,47 @@ same id in both.
   the case id after cleaning) mines in about 7 s into 275 evidence items, so
   the full app flow can be tested end to end in the automated suite.
 
+## 5b. User interface design (UI design phase)
+
+**Users first, demo second** (user decision). The UI is designed for an SME
+business analyst in long desktop sessions; the thesis demo benefits from that.
+Streamlit was kept (user decision) so the API client and tests stay valid; the
+look comes from Streamlit's own theme config (light and dark), vendored IBM Plex
+fonts, and custom components v2 that render in the page and read the theme's
+CSS variables, so light and dark need no second set of styles.
+
+**The wait ladder** (user-chosen direction, from lean value-stream maps). Each
+page answers one question first; on Evidence it is "where do the days go?". The
+answer is drawn: one variant's steps top to bottom, each step's *mean* wait as a
+bar starting where the previous one ended. WHY per path and not per edge: edge
+waits are medians over every case on that transition, so laid end to end along
+one path they describe nothing a case experienced (the 2-way-match happy path
+takes 40 min; its one edge has a segment-wide median of days). WHY the mean
+positions the bars: means are additive, so the rungs sum exactly to the path's
+mean throughput (checked in `tests/test_mining_paths.py`); medians and P90 are
+shown per step but do not add up. Computed in `mining/paths.py` from the
+`case_waits.parquet` mining already writes; served read-only by
+`GET /runs/{id}/segments/{slug}/variants/{rank}/waits`. The default path is the
+most frequent one with more than one wait (choosing the path through the worst
+bottleneck was tried and opened on a path of 4 cases in the sample).
+
+**Proposals are shown where they act.** Each proposal draws the same ladder for
+the most frequent path it touches, with automated / removed / added steps
+marked, and its ESTIMATE as today-vs-estimate bars on the pair's own scale;
+cited evidence sits beside every claim rather than behind an expander. As-is and
+to-be BPMN are stacked full width (side by side, the wide models shrank below
+reading size) with the changed tasks outlined.
+
+**Human in the loop, enforced in the form.** The approve/reject control has no
+default; submitting without a choice keeps the typed comment and asks again
+(tested in `tests/test_app_ui.py`).
+
+**Accessibility.** WCAG AA contrast checked for every token in both modes. One
+trade-off found: Streamlit always puts white labels on primary buttons, so dark
+mode's primary teal must stay deep (#1A7F88, 4.73:1 with white), which is under
+4.5:1 as text on the dark ground; selected segment and tab labels therefore use
+the ink colour, and a brighter teal (#3CB4BE) carries data in dark mode.
+
 ## 6. Limitations to state
 
 - Single-timestamp log: waiting and processing time cannot be separated.
@@ -289,6 +344,11 @@ same id in both.
   the API process.
 - The analyst approves or rejects the set of 2-3 proposals as a whole; there
   is no per-proposal choice in the graph.
+- Streamlit has no API to switch the theme: the Light/Dark switch stores the
+  choice where Streamlit's settings menu keeps it and reloads the page (the
+  current run, segment and path are carried over in the URL).
+- The wait ladder shows one variant at a time; cases on rare paths (outside the
+  top-10 variants) are only in the tables.
 
 ## 7. Tools and environment
 
@@ -298,7 +358,7 @@ LangGraph 1.2.15; langchain 1.4.6; langchain-anthropic 1.7.6; PuLP 3.3.2
 (needed for BPMN layout and pictures). Exact set in `requirements.lock`.
 FastAPI 0.162.0, uvicorn 0.54.0, Streamlit 1.66.0, bpmn-js 18.31.0 (vendored).
 Runtime: mining all four BPI segments takes about 1.5 min (largest segment
-about 59 s); the 800-case sample about 7 s. Tests: 280 automated tests on
+about 59 s); the 800-case sample about 7 s. Tests: 295 automated tests on
 hand-built logs with known answers and on the committed sample (including the
 API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 2019 tests are opt-in.
@@ -322,3 +382,8 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | App phase | Data enters via a configured preset or an uploaded file with analyst-confirmed mapping |
 | App phase | A rule-based mock model is built (no-key runs, evaluation baseline) |
 | App phase | bpmn-js is vendored so the app works offline |
+| UI phase | Analysts are the primary user; the demo is secondary |
+| UI phase | Stay on Streamlit; light and dark mode with a visible sidebar switch |
+| UI phase | Petrol teal accent, IBM Plex Sans (vendored, offline) |
+| UI phase | Signature element: value-stream wait ladder (per-path mean waits) |
+| UI phase | BPMN diagrams follow the dark theme; the bpmn.io watermark stays visible |

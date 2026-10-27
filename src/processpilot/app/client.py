@@ -134,6 +134,10 @@ class ApiClient:
         return self._request("GET", f"/runs/{run_id}/segments/{slug}/as-is.bpmn").text
 
     # agent
+    def variant_waits(self, run_id: str, slug: str, rank: int) -> dict[str, Any]:
+        """Per-step waits of the cases on variant ``rank`` (the wait ladder)."""
+        return self._json("GET", f"/runs/{run_id}/segments/{slug}/variants/{rank}/waits")
+
     def agent_runs(self, run_id: str, slug: str) -> list[dict[str, Any]]:
         """Agent runs of a segment, newest first."""
         return self._json("GET", f"/runs/{run_id}/segments/{slug}/agent-runs")

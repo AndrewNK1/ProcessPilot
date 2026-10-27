@@ -55,6 +55,10 @@ A first run in under a minute: page **Data** -> preset `bpi2019_sample` ->
 *Run the agent* (model `mock` works without a key) -> approve or reject with a
 comment.
 
+Light and dark mode: the switch at the foot of the sidebar (the first visit
+follows the operating system's setting). The look is documented in
+`DESIGN.md`; the theme itself lives in `src\processpilot\app\.streamlit\config.toml`.
+
 The Streamlit app only talks to the API. The API keeps a SQLite index
 (`outputs\app\processpilot.sqlite`) of datasets, runs, background jobs and
 agent runs, and the log of every analyst decision; evidence, models and agent

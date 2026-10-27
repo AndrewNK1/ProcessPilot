@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-27T12:00:00Z",
+  "title": "Design System: ProcessPilot",
+  "extensions": {
+    "colorMeta": {
+      "petrol-teal": { "role": "primary", "displayName": "Petrol Teal", "canonical": "#0B6E77", "tonalRamp": ["#032a2e", "#06434a", "#0b6e77", "#2a8d95", "#5cabb1", "#93c9cd", "#c6e3e5", "#eaf5f6"] },
+      "petrol-teal-bright-dark": { "role": "primary", "displayName": "Bright Petrol (dark data hue)", "canonical": "#3CB4BE" },
+      "canvas": { "role": "neutral", "displayName": "Canvas", "canonical": "#FFFFFF" },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#141A1B", "tonalRamp": ["#141a1b", "#2b3234", "#434b4d", "#566062", "#7a8385", "#a3aaab", "#d5dbdb", "#f3f5f5"] },
+      "canvas-dark": { "role": "neutral", "displayName": "Canvas (dark)", "canonical": "#111415" }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "The page's one h1: a noun plus the segment." },
+      "figure": { "displayName": "Figure", "purpose": "KPI values, tabular figures." },
+      "evidence-id": { "displayName": "Evidence ID", "purpose": "Citable evidence and run ids only." }
+    },
+    "shadows": [
+      { "name": "switch-selected", "value": "0 0 0 1px var(--st-border-color)", "purpose": "The selected option of the appearance switch; the only lifted element." }
+    ],
+    "motion": [
+      { "name": "control-feedback", "value": "120ms ease-out", "purpose": "Colour change on the appearance switch's hover and selection." }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "640px" },
+      { "name": "kpi-fold", "value": "720px" },
+      { "name": "gutter", "value": "900px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action of a form.",
+      "html": "<button class=\"ds-btn-primary\">Mine this log</button>",
+      "css": ".ds-btn-primary { background: #0B6E77; color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font: 500 15px/1.2 'IBM Plex Sans', sans-serif; transition: background 120ms ease-out; } .ds-btn-primary:hover { background: #0A5F67; } .ds-btn-primary:focus-visible { outline: 2px solid #0B6E77; outline-offset: 2px; }"
+    },
+    {
+      "name": "KPI Strip",
+      "kind": "card",
+      "refersTo": "kpi-strip",
+      "description": "Headline figures in one divided container.",
+      "html": "<dl class=\"ds-kpi\"><div><dt>Cases</dt><dd>200</dd></div><div><dt>Median throughput</dt><dd>26.5<span>d</span></dd></div><div><dt>P90 throughput</dt><dd>190.1<span>d</span></dd></div></dl>",
+      "css": ".ds-kpi { display: grid; grid-template-columns: repeat(3, 1fr); margin: 0; border: 1px solid #D5DBDB; border-radius: 8px; font-family: 'IBM Plex Sans', sans-serif; color: #141A1B; } .ds-kpi > div { padding: 14px 18px; display: flex; flex-direction: column; } .ds-kpi > div + div { border-left: 1px solid #E3E7E7; } .ds-kpi dt { flex: 1; font-size: 13px; color: #4a5355; } .ds-kpi dd { margin: 4px 0 0; font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; } .ds-kpi dd span { font-size: 14px; font-weight: 400; color: #4a5355; margin-left: 3px; }"
+    },
+    {
+      "name": "Wait Ladder",
+      "kind": "custom",
+      "refersTo": "ladder-rung",
+      "description": "One path's steps; each mean wait starts where the previous one ended.",
+      "html": "<div class=\"ds-ladder\"><div class=\"r\"><span>Vendor creates invoice</span><i class=\"s\" style=\"left:0\"></i><b>start</b></div><div class=\"r\"><span>Create Purchase Order Item <code>BN-03</code></span><i style=\"left:0;width:70%\"></i><b>16.3 d</b></div><div class=\"r\"><span>Record Invoice Receipt</span><i style=\"left:72%;width:12%\"></i><b>2.4 d</b></div></div>",
+      "css": ".ds-ladder { font: 14px/20px 'IBM Plex Sans', sans-serif; color: #141A1B; } .ds-ladder .r { display: grid; grid-template-columns: 220px 1fr 70px; gap: 16px; align-items: center; height: 40px; position: relative; } .ds-ladder .r i { position: absolute; height: 12px; border-radius: 2px; background: #0B6E77; margin-left: 236px; max-width: calc(100% - 322px); } .ds-ladder .r i.s { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #0B6E77; background: #fff; } .ds-ladder b { grid-column: 3; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; } .ds-ladder code { font: 12px 'IBM Plex Mono', monospace; color: #0A5F67; }"
+    },
+    {
+      "name": "Evidence ID",
+      "kind": "chip",
+      "refersTo": "evidence-id",
+      "description": "An inline citable ID.",
+      "html": "<code class=\"ds-id\">BN-01-2-way-match</code>",
+      "css": ".ds-id { font: 12px 'IBM Plex Mono', monospace; color: #0A5F67; background: #EDF3F3; padding: 1px 5px; border-radius: 4px; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "description": "Page link; the active page is a neutral grey pill.",
+      "html": "<nav class=\"ds-nav\"><a>Data</a><a aria-current=\"page\">Evidence</a><a>Redesign</a></nav>",
+      "css": ".ds-nav { display: grid; gap: 2px; width: 220px; font: 15px 'IBM Plex Sans', sans-serif; } .ds-nav a { padding: 6px 10px; border-radius: 6px; color: #141A1B; cursor: pointer; } .ds-nav a:hover { background: #ECEFEF; } .ds-nav a[aria-current] { background: #E6EAEA; font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Value-Stream Worksheet",
+    "overview": "ProcessPilot reads like a lean value-stream worksheet put on a screen: the analyst's question is \"where do the days go?\", and the answer is drawn, not described. The interface is a working tool for long desktop sessions: noun titles, a finding line under every title, a divided KPI strip, ruled tables, flat surfaces, teal only on data and the one primary action.",
+    "keyCharacteristics": [
+      "One hue family, petrol teal, on data and the primary action only.",
+      "IBM Plex Sans for everything; IBM Plex Mono for evidence IDs and nothing else.",
+      "Flat at rest: 1px borders and tone steps, no shadows on resting surfaces.",
+      "Every claim sits beside the evidence it cites; estimates are always labelled ESTIMATE.",
+      "True neutral darks; no navy, no slate."
+    ],
+    "rules": [
+      { "name": "The Data-Not-Chrome Rule", "body": "Teal marks data and the one primary action of a form. Navigation, tabs and selected segments keep ink labels; their selection shows as a tint, a border or an underline.", "section": "colors" },
+      { "name": "The Two-Teal Rule", "body": "Dark mode uses two teals: a deep one under white labels, a bright one for data and text. Never set the deep one as text on the dark ground (under 4.5:1).", "section": "colors" },
+      { "name": "The Cite-In-Mono Rule", "body": "Monospace appears only on evidence IDs and run ids; numbers use Plex Sans tabular figures.", "section": "typography" },
+      { "name": "The Flat-At-Rest Rule", "body": "A border or a tone step, never both, and never a shadow on a panel.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do put the answer to the page's question in its biggest block (the ladder on Evidence).",
+      "Do write one finding line under each title, with its evidence ID.",
+      "Do keep every number right-aligned in tabular figures, with its unit in secondary ink.",
+      "Do label every projected number ESTIMATE and draw it dashed.",
+      "Do leave the decision empty until the analyst chooses Approve or Reject."
+    ],
+    "donts": [
+      "Don't put teal on navigation, tab labels or selected segment labels.",
+      "Don't add shadows to panels, gradients to surfaces, or icons in tinted tiles.",
+      "Don't use a dark or saturated sidebar, or a navy or slate dark theme.",
+      "Don't set monospace on anything but evidence and run ids.",
+      "Don't hide or dim the bpmn.io watermark."
+    ]
+  }
+}

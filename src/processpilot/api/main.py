@@ -179,6 +179,10 @@ def create_app(workspace: Workspace | None = None) -> FastAPI:
     def as_is_bpmn(run_id: str, slug: str) -> Response:
         return Response(_call(ws().as_is_bpmn, run_id, slug), media_type=_BPMN_MEDIA_TYPE)
 
+    @app.get("/runs/{run_id}/segments/{slug}/variants/{rank}/waits")
+    def variant_waits(run_id: str, slug: str, rank: int) -> dict[str, Any]:
+        return _call(ws().variant_waits, run_id, slug, rank)
+
     # --- agent ---------------------------------------------------------------
 
     @app.get("/runs/{run_id}/segments/{slug}/agent-runs")

@@ -45,3 +45,8 @@ CLAUDE.md
 Thumbs.db
 desktop.ini
 .sf/
+
+# --- design review scratch (screenshots, inspector output) -------------------
+.taste-skill/
+.impeccable/review/
+.playwright-cli/

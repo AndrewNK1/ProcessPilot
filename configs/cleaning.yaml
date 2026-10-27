@@ -1,0 +1,20 @@
+# ---------------------------------------------------------------------------
+# ProcessPilot's cleaning recommendation (pipeline.recommend_cleaning).
+#
+# The recommendation is computed from the dataset's own data-quality report
+# and a dry run of each cleaning option; it is shown next to the options and
+# applied only if the analyst chooses it. These thresholds encode
+# ProcessPilot's position: remove data only when keeping it would distort the
+# measurements, and never remove so much that the result stops describing
+# the process that actually ran.
+# ---------------------------------------------------------------------------
+recommendation:
+  # Above this share of events removed by one option, removal is NOT
+  # recommended: that many bad rows usually means a wrong mapping, timestamp
+  # format or plausible range, which must be fixed instead.
+  max_event_share_removed: 0.05
+  # Cases with fewer events than the preset's minimum have zero throughput
+  # and pull throughput statistics towards zero. Above this share of cases,
+  # removing them is recommended; below it they are kept, because they are
+  # real (often still open) cases and their effect is small.
+  single_event_case_share_to_remove: 0.05

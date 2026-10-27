@@ -70,8 +70,14 @@ sql = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-# The vendored bpmn-js viewer served by the Streamlit component.
-processpilot = ["app/components/bpmn_viewer/*"]
+# The vendored bpmn-js viewer, the vendored IBM Plex fonts and mark (served by
+# Streamlit static serving) and the app-level Streamlit theme config.
+processpilot = [
+    "app/components/bpmn_viewer/*",
+    "app/static/*",
+    "app/static/fonts/*",
+    "app/.streamlit/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
