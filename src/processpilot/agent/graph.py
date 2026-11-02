@@ -144,15 +144,8 @@ def model_id_from_env(settings: AgentSettings) -> str:
     return model_id
 
 
-def create_llm(model_id: str, settings: AgentSettings, run_dir: Path) -> StructuredLLM:
-    """The model behind ``model_id``; ``mock`` is the rule-based stand-in.
-
-    Anything else is a ``provider:model`` id for ``init_chat_model``.
-    """
-    from processpilot.llm.mock import MOCK_MODEL_ID, MockLLM
-
-    if model_id == MOCK_MODEL_ID:
-        return MockLLM(run_dir)
+def create_llm(model_id: str, settings: AgentSettings) -> StructuredLLM:
+    """The model behind a ``provider:model`` id for ``init_chat_model``."""
     return LangChainLLM(model_id, settings.model)
 
 
@@ -189,7 +182,7 @@ class AgentRunner:
         self.catalogue = catalogue or load_heuristics()
         self.domain = domain or load_domain_knowledge(preset.get("domain_knowledge"))
         self.store = EvidenceStore.from_json(self.run_dir / "evidence.json")
-        self.llm = llm or create_llm(model_id_from_env(self.settings), self.settings, self.run_dir)
+        self.llm = llm or create_llm(model_id_from_env(self.settings), self.settings)
         self._saver, self._conn = open_checkpointer(self.run_dir / CHECKPOINT_FILE)
 
     def __enter__(self) -> AgentRunner:

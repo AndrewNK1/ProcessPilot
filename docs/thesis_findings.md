@@ -261,16 +261,6 @@ outside 2017-01-01 to 2020-05-01; keep the 2,835 single-event cases (1.1%)
 and the 180,755 exact duplicate events (11.3%, batch postings already
 collapsed for flow analysis).
 
-**Mock model as a baseline.** `PP_MODEL=mock` is a rule-based stand-in behind
-the same interface as the LLM: it reads the same evidence, its output passes
-the same validators, and every text is marked `[mock]`. It lets the whole
-pipeline run without an API key, and it is the natural baseline for the
-evaluation: "what would simple rules have proposed from the same evidence?"
-Its rules: diagnose the top bottlenecks, the top activity wait and the top
-rework; propose automation of the activity with the leading wait, elimination
-of the most repeated non-protected activity, and automation of the target of
-the top bottleneck, each trial-applied to the model.
-
 **BPMN display offline.** bpmn-js (navigated viewer; 18.31.1 since the React
 app, bundled into the build) needs no network, so the app needs none except
 for the LLM call. As-is and to-be models are shown stacked full width; because
@@ -388,13 +378,60 @@ route, assets, API routes unaffected, settings endpoint, an unbuilt checkout
 explains how to build) plus the unchanged API suite. TypeScript: type check
 and vitest unit tests for the itinerary logic and number formatting. In a real
 browser (Playwright, Chromium): upload of the sample CSV -> profiling ->
-mapping -> quality report -> mining -> evidence; and on the mock model:
-agent started from the UI -> submit without a choice (comment kept) -> reject
+mapping -> quality report -> mining -> evidence; and the agent flow:
+started from the UI -> submit without a choice (comment kept) -> reject
 with comment -> revised round with an empty form -> approve -> two log entries
 (one voided, one approved). Screens checked at 1440, 768 and 390 px in light
 and dark; automated design checks (taste inspector, Impeccable detector) pass
 with 0 failures. The browser walk-throughs were run by hand with Playwright;
 they are not part of the automated test suite.
+
+## 5d. BPMN drawing (2026-11-02)
+
+**Problem.** Rendering each process-tree operator as its own split/join pair is
+correct but wasteful. In the largest BPI 2019 model, 33 tasks sat among 94
+gateways, and 115 of 180 flows ran from one gateway straight to another. Most
+of those gateways decided nothing, which makes the model harder for an analyst
+to read even though it is formally right.
+
+**Method.** Three changes to the rendering only; the process tree, evidence and
+estimates are unchanged.
+
+1. *Gateway merging.* A flow between two gateways of the same type is removed
+   when nothing else can happen at that point: the source has one exit, the
+   target has one entrance, or two exclusive gateways lead straight back to each
+   other. In Petri-net terms an exclusive gateway is a place and a parallel
+   gateway a transition, so such a flow is a silent step. A skip from a real
+   split to a real join is a routing decision and stays, as do boundaries
+   between exclusive and parallel gateways.
+2. *Loop marker.* A single task repeated on its own is drawn with BPMN's standard
+   loop marker instead of two gateways and a back-arrow.
+3. *Layout.* Graphviz is called directly with BPMN's shapes and fixed sizes,
+   replacing pm4py's layouter, whose flows stopped short of diamond outlines.
+
+**Result** (as-is models, run `20261102T160209Z`):
+
+| Segment | Tasks | Gateways | Flows | Drawing width |
+| --- | --- | --- | --- | --- |
+| 2-way match | 8 | 16 -> 11 (-31%) | 34 -> 27 | 2305 -> 1888 |
+| 3-way, invoice after GR | 33 | 94 -> 47 (-50%) | 180 -> 117 | 9591 -> 6104 |
+| 3-way, invoice before GR | 39 | 58 -> 31 (-47%) | 149 -> 114 | 5705 -> 4174 |
+| Consignment | 15 | 16 -> 7 (-56%) | 47 -> 36 | 2815 -> 1872 |
+
+Edges cross nowhere in these four drawings and none passes through a task.
+Polyline routing was chosen over orthogonal after measuring both on these models:
+orthogonal routing looks tidier but added up to 14 crossings at the same spacing
+and stacked several flows on one track, so a reader could not follow them.
+
+**Verification.** A shorter drawing is only acceptable if the process is the
+same, so the written BPMN file is executed as a token game and its traces are
+compared with the traces the process tree allows by definition. They were equal
+on hand-picked shapes and 150 random trees, and on the four real models up to
+5, 3, 2 and 5 activities (2-way, after GR, before GR, consignment). Deliberately
+breaking the merge rule makes these tests fail. Woflan confirms soundness on the
+two models within its size gate (21 and 30 Petri-net transitions); the two larger
+ones (117 and 85) are skipped, so they rest on construction plus the structural
+check, as before.
 
 ## 6. Limitations to state
 
@@ -425,6 +462,12 @@ they are not part of the automated test suite.
   the UI's logic, not clicks through the screens.
 - The built front end is committed next to its source; a UI change that is not
   rebuilt leaves the served app behind the source.
+- Behaviour-preservation of the compact BPMN drawing is shown by bounded trace
+  comparison (2 to 5 activities on the real models) and by tests on small trees,
+  not by a formal proof. The two large models are still dense: their remaining
+  gateways are real skips and exclusive/parallel boundaries.
+- A compact drawing merges a join directly followed by a split into one gateway.
+  This is valid BPMN, but some modelling style guides prefer them separate.
 
 ## 7. Tools and environment
 
@@ -438,7 +481,7 @@ lucide-react 1.62.0, Archivo (OFL, via @fontsource-variable/archivo 5.3.0),
 vitest 5.0.5; built with Node 24.11.0 (exact set in `web/package-lock.json`).
 Streamlit 1.66.0 was used until 2026-10-27 and has been uninstalled.
 Runtime: mining all four BPI segments takes about 1.5 min (largest segment
-about 59 s); the 800-case sample about 7 s. Tests: 301 automated Python tests
+about 59 s); the 800-case sample about 7 s. Tests: 295 automated Python tests
 (plus 7 TypeScript unit tests for the web app's logic) on
 hand-built logs with known answers and on the committed sample (including the
 API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
@@ -455,13 +498,12 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | Phase 3 | Model: Claude Opus 5.5 via `PP_MODEL`, swappable |
 | Phase 3 | Number-check issues downgrade to warnings after retries |
 | Phase 3 | "Extra resources" heuristic is not BPMN-editable |
-| Re-plan | Keep existing architecture; add mock LLM, FastAPI and SQLite later |
+| Re-plan | Keep existing architecture; add FastAPI and SQLite later |
 | Re-plan | Raw BPI zip stays in the repo for the supervisor |
 | Phase 4 | Protected activities may be automated |
 | Phase 4 | Automation assumes 50% wait reduction; an added step costs the median wait |
 | App phase | SQLite holds an index and the decision log, not a copy of runs |
 | App phase | Data enters via a configured preset or an uploaded file with analyst-confirmed mapping |
-| App phase | A rule-based mock model is built (no-key runs, evaluation baseline) |
 | App phase | bpmn-js is vendored so the app works offline |
 | UI phase | Analysts are the primary user; the demo is secondary |
 | UI phase | Stay on Streamlit; light and dark mode with a visible sidebar switch (superseded by "Front end" rows) |
@@ -472,3 +514,5 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | Front end | React + TypeScript + Vite; build committed and served by FastAPI (no Node to run) |
 | Front end | New visual identity; nothing kept from the Streamlit look; Linear as quality bar |
 | Front end | Visual world "Ticket Wallet" chosen after one re-roll; palette refined (no purple) |
+| 2026-11-02 | The agent runs only on a real LLM; there is no rule-based stand-in or baseline model |
+| 2026-11-02 | BPMN drawings must be compact: no gateways that decide nothing |

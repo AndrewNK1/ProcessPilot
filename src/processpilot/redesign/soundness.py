@@ -16,7 +16,9 @@
    and parallel blocks) it did not finish within two minutes. The gate is a
    count, not a time limit, so the verdict does not depend on machine speed.
 
-The result always states which layers ran.
+The result always states which layers ran. All layers check the explicit model
+(``to_bpmn``), where a repeated task is still a loop of gateways; the written
+file draws it with a loop marker, which pm4py cannot read.
 """
 
 from __future__ import annotations

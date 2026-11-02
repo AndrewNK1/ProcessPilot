@@ -36,7 +36,7 @@ LLM only interprets precomputed evidence. Every claim cites a stable evidence ID
   with a comment, which resumes the paused agent).
 - Evaluation dataset: BPI Challenge 2019 (purchase-to-pay), segmented by item category; a committed
   800-case sample for demos and tests.
-- Runs locally on Windows; everything offline except the LLM call (a rule-based mock exists).
+- Runs locally on Windows; everything offline except the LLM call.
 
 ## Capabilities and Constraints
 
@@ -62,8 +62,8 @@ LLM only interprets precomputed evidence. Every claim cites a stable evidence ID
 
 ## Evidence on Hand
 
-Real mined runs under `outputs/runs/` (BPI 2019 full and sample) and the mock model provide real
-evidence, proposals and BPMN for every screen. No customers, testimonials or usage statistics
+Real mined runs under `outputs/runs/` (BPI 2019 full and sample) and agent runs on the real model
+provide real evidence, proposals and BPMN for every screen. No customers, testimonials or usage statistics
 exist; none may be invented.
 
 ## Product Principles

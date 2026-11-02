@@ -44,6 +44,21 @@ model:
       reasoning_effort: high
       temperature: 0
       max_tokens: 16000
+    # ChatMistralAI (langchain-mistralai 1.1.6), hosted by Mistral, e.g.
+    # PP_MODEL=mistralai:mistral-large-latest; key in MISTRAL_API_KEY.
+    # temperature 0 + random_seed make reruns closer, but Mistral does not
+    # promise bit-identical output, so prompts and raw outputs are still logged.
+    mistralai:
+      temperature: 0
+      random_seed: 42
+      max_tokens: 16000
+    # ChatGoogleGenerativeAI (langchain-google-genai 4.4.2), Gemini API, e.g.
+    # PP_MODEL=google_genai:gemini-2.5-pro; key in GOOGLE_API_KEY. Same
+    # reproducibility caveat as above: seeded, not bit-identical, so logged.
+    google_genai:
+      temperature: 0
+      seed: 42
+      max_output_tokens: 16000
   # `json_schema` = the provider's native structured-output mode. Forced tool
   # calling ("function_calling") is rejected by Claude Opus 5.5 / Sonnet 5.5.
   structured_output_method: json_schema

@@ -30,10 +30,10 @@ Copy-Item .env.example .env   # then edit .env
 winget install --id Graphviz.Graphviz   # then add C:\Program Files\Graphviz\bin to PATH
 ```
 
-`.env` is gitignored. Set `PP_MODEL` to `anthropic:claude-opus-5-5` (with
-`ANTHROPIC_API_KEY`) for the real model, or to `mock` to run everything without
-a key (rule-based stand-in, every output marked `[mock]`). Without Graphviz the
-pipeline still runs, but BPMN diagrams have no layout.
+`.env` is gitignored. Set `PP_MODEL` to `anthropic:claude-opus-5-5` and
+`ANTHROPIC_API_KEY`; the agent needs a model and its key, everything else runs
+offline. Without Graphviz the pipeline still runs, but BPMN diagrams have no
+layout.
 
 ## Run the app
 
@@ -48,8 +48,7 @@ script: `.\.venv\python.exe -m processpilot.api`, then open the address.
 
 A first run in under a minute: page **Data** -> preset `bpi2019_sample` ->
 *Check data quality* -> *Mine this log*; page **Evidence**; page **Redesign** ->
-*Run the agent* (model `mock` works without a key) -> approve or reject with a
-comment.
+*Run the agent* -> approve or reject with a comment.
 
 Light and dark mode: the switch at the foot of the sidebar (System follows
 the operating system). The look is documented in `DESIGN.md`; its tokens live
@@ -91,7 +90,6 @@ alone; rebuild and commit it after every UI change.
 | `src/processpilot/redesign/` | typed edit ops, BPMN editing, impact estimate |
 | `src/processpilot/process_tree.py` | editable process tree, BPMN rendering with stable ids |
 | `src/processpilot/pipeline.py` | ingest -> validate -> clean -> mine, shared by API and notebooks |
-| `src/processpilot/llm/` | rule-based mock model (`PP_MODEL=mock`) |
 | `src/processpilot/api/` | FastAPI backend, background jobs, SQLite index + decision log; serves the built web app (`api/static`) |
 | `web/` | web app source: React + TypeScript + Vite, bpmn-js viewer (calls the API only) |
 | `configs/` | dataset presets, heuristics catalogue, agent and app settings |

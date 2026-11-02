@@ -233,8 +233,7 @@ function StartRun({
           <label htmlFor="model-id">Model</label>
           <input id="model-id" type="text" value={modelValue} onChange={(e) => setModelId(e.target.value)} aria-describedby="model-hint" />
           <span className="hint" id="model-hint">
-            mock is the rule-based baseline (no API key). Any id init_chat_model accepts works, e.g.
-            anthropic:claude-opus-5-5.
+            Any id init_chat_model accepts works, e.g. anthropic:claude-opus-5-5.
           </span>
         </div>
         {start.isError && <ApiProblem error={start.error} />}
@@ -274,7 +273,6 @@ function AgentRunView({
     <>
       <p className="small muted num">
         Agent run {detail.agent_run_id} · model {detail.model_id} · started {fmtStamp(detail.created_at)} UTC
-        {detail.model_id === "mock" && " · rule-based mock: no language model was involved, every text starts with [mock]"}
       </p>
       {detail.busy && (
         <div className="progress" role="status">

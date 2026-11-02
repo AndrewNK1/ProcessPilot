@@ -5,10 +5,11 @@ relies on is the routes, status codes and JSON shapes. Jobs run inline
 (``inline_jobs=True``) so every request's effects are visible when it returns.
 
 Two flows: the committed BPI sample through preset -> validate -> mine ->
-agent (rule-based mock) -> reject with comment -> revised proposals ->
-approve; and a hand-built CSV through upload -> profile -> analyst mapping ->
-validate -> mine. The agent-only tests use the hand-built run from
-``agent_fixtures`` (fast, known evidence).
+agent -> reject with comment -> revised proposals -> approve; and a hand-built
+CSV through upload -> profile -> analyst mapping -> validate -> mine. The
+agent-only tests use the hand-built run from ``agent_fixtures`` (fast, known
+evidence). The model is always a ``ScriptedLLM`` patched in for
+``create_llm``: tests never call a real LLM.
 """
 
 from __future__ import annotations
@@ -21,16 +22,47 @@ from typing import NoReturn
 import pytest
 from fastapi.testclient import TestClient
 
-from agent_fixtures import SEGMENT, SLUG, write_run_dir
+from agent_fixtures import (
+    SEGMENT,
+    SLUG,
+    ParseFailure,
+    ScriptedLLM,
+    valid_diagnosis,
+    valid_redesign,
+    write_run_dir,
+)
+from processpilot.api import service
 from processpilot.api.db import Database
 from processpilot.api.main import create_app
 from processpilot.api.service import AppSettings, Workspace
 
 SETTINGS = AppSettings(host="127.0.0.1", port=0, job_workers=1, max_upload_mb=1)
+MODEL_ID = "anthropic:claude-opus-5-5"
 
 
 def _workspace(root: Path) -> Workspace:
     return Workspace(root / "runs", root / "app", SETTINGS, inline_jobs=True)
+
+
+def _script(monkeypatch: pytest.MonkeyPatch, outputs: list) -> ScriptedLLM:
+    """One scripted model shared by every runner the API builds (start and resume)."""
+    llm = ScriptedLLM(outputs)
+    monkeypatch.setattr(service, "create_llm", lambda model_id, settings: llm)
+    return llm
+
+
+def _automate(activity: str, evidence_id: str) -> dict:
+    """An automation proposal with no numbers in its text (nothing for the number check)."""
+    return {
+        "title": f"Automate '{activity}'",
+        "heuristic_id": "H-AUTOMATION",
+        "edit_operations": [{"op": "automate_activity", "activity": activity}],
+        "evidence_ids": [evidence_id],
+        "rationale": f"Work queues before '{activity}'.",
+        "expected_effect": "Less waiting before the automated step.",
+        "risks": ["Automation may not suit every case."],
+        "assumptions": [f"The system can perform '{activity}' without manual input."],
+    }
 
 
 @pytest.fixture
@@ -60,7 +92,9 @@ def _fixture_run(tmp_path: Path) -> str:
 # --- full flow on the committed BPI sample ----------------------------------------
 
 
-def test_bpi_sample_from_preset_to_approved_redesign(client: TestClient) -> None:
+def test_bpi_sample_from_preset_to_approved_redesign(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     presets = {p["name"]: p for p in client.get("/presets").json()}
     assert presets["bpi2019_sample"]["source_available"]
     assert not presets["generic"]["source_available"]  # a base for uploads only
@@ -109,14 +143,36 @@ def test_bpi_sample_from_preset_to_approved_redesign(client: TestClient) -> None
     model = client.get(f"/runs/{run_id}/segments/{slug}/model").json()
     assert model["default_constraints"]["protected_activities"] == ["Clear Invoice"]
 
+    a, b, c = model["activities"][:3]
+    bn = bottlenecks[0]["id"]
+    diagnosis = {
+        "hypotheses": [
+            {
+                "description": f"The leading transition wait is the main delay [{bn}].",
+                "evidence_ids": [bn],
+                "confidence": "medium",
+                "alternative_explanations": ["Vendors may set the pace."],
+            }
+        ]
+    }
+    llm = _script(
+        monkeypatch,
+        [
+            diagnosis,
+            {"proposals": [_automate(a, bn), _automate(b, bn)]},
+            {"proposals": [_automate(c, bn), _automate(a, bn)]},
+        ],
+    )
+
     started = _job(
-        client, client.post(f"/runs/{run_id}/segments/{slug}/agent-runs", json={"model_id": "mock"})
+        client,
+        client.post(f"/runs/{run_id}/segments/{slug}/agent-runs", json={"model_id": MODEL_ID}),
     )
     arid = started["result"]["agent_run_id"]
     base = f"/runs/{run_id}/segments/{slug}/agent-runs/{arid}"
     detail = client.get(base).json()
     assert detail["awaiting_review"] and detail["review_round"] == 1
-    assert detail["model_id"] == "mock" and 2 <= len(detail["proposals"]) <= 3
+    assert detail["model_id"] == MODEL_ID and len(detail["proposals"]) == 2
     first_titles = [p["proposal"]["title"] for p in detail["proposals"]]
     assert all(p["validation"]["status"] == "validated" for p in detail["proposals"])
     assert all(p["validation"]["estimate"]["label"] == "ESTIMATE" for p in detail["proposals"])
@@ -132,6 +188,7 @@ def test_bpi_sample_from_preset_to_approved_redesign(client: TestClient) -> None
     detail = client.get(base).json()
     assert detail["awaiting_review"] and detail["review_round"] == 2
     assert [p["proposal"]["title"] for p in detail["proposals"]] != first_titles
+    assert "Prefer other steps." in llm.calls[-1][0][-1].content  # comment reached the model
 
     _job(client, client.post(f"{base}/decision", json={"decision": "approve"}))
     detail = client.get(base).json()
@@ -207,22 +264,25 @@ def test_upload_rejects_unsupported_and_oversized_files(client: TestClient) -> N
 # --- runs found on disk, agent rules ------------------------------------------------
 
 
-def test_run_found_on_disk_needs_its_preset_before_the_agent(tmp_path: Path) -> None:
+def test_run_found_on_disk_needs_its_preset_before_the_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     run_id = _fixture_run(tmp_path)
+    _script(monkeypatch, [valid_diagnosis(), valid_redesign()])
     with TestClient(create_app(_workspace(tmp_path))) as client:
         listed = client.get("/runs").json()
         assert [(r["run_id"], r["origin"], r["preset"]) for r in listed] == [(run_id, "disk", None)]
         start = f"/runs/{run_id}/segments/{SLUG}/agent-runs"
-        assert client.post(start, json={"model_id": "mock"}).status_code == 409
+        assert client.post(start, json={"model_id": MODEL_ID}).status_code == 409
         assert client.put(f"/runs/{run_id}/preset", json={"preset": "nope"}).status_code == 422
         assert client.put(f"/runs/{run_id}/preset", json={"preset": "generic"}).status_code == 200
 
-        job = _job(client, client.post(start, json={"model_id": "mock"}))
+        job = _job(client, client.post(start, json={"model_id": MODEL_ID}))
         detail = client.get(f"{start}/{job['result']['agent_run_id']}").json()
         assert detail["awaiting_review"]
         assert {p["proposal"]["heuristic_id"] for p in detail["proposals"]} == {
-            "H-AUTOMATION",
-            "H-TASK-ELIMINATION",
+            "H-TASK-COMPOSITION",
+            "H-PARALLELISM",
         }
 
 
@@ -238,13 +298,15 @@ def test_unknown_ids_are_404_and_never_reach_the_filesystem(tmp_path: Path) -> N
         assert client.get("/jobs/x").status_code == 404
 
 
-def test_agent_failure_is_recorded_on_the_job_and_the_agent_run(tmp_path: Path) -> None:
+def test_agent_failure_is_recorded_on_the_job_and_the_agent_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     run_id = _fixture_run(tmp_path)
-    (tmp_path / "runs" / run_id / SLUG / "as_is_tree.json").unlink()  # mock cannot redesign
+    _script(monkeypatch, [ParseFailure()] * 3)  # first attempt + max_retries 2, all unparseable
     with TestClient(create_app(_workspace(tmp_path))) as client:
         client.put(f"/runs/{run_id}/preset", json={"preset": "generic"})
         response = client.post(
-            f"/runs/{run_id}/segments/{SLUG}/agent-runs", json={"model_id": "mock"}
+            f"/runs/{run_id}/segments/{SLUG}/agent-runs", json={"model_id": MODEL_ID}
         )
         job = client.get(f"/jobs/{response.json()['job_id']}").json()
         # The graph handles a failed LLM step itself: the job succeeds, the run is failed.

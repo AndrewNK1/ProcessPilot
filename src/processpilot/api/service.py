@@ -577,9 +577,7 @@ class Workspace:
         preset = self._preset(preset_name)
         if model_id is None:
             return AgentRunner(run_dir, preset, llm=_ReadOnlyModel())
-        return AgentRunner(
-            run_dir, preset, llm=create_llm(model_id, load_agent_settings(), run_dir)
-        )
+        return AgentRunner(run_dir, preset, llm=create_llm(model_id, load_agent_settings()))
 
     def start_agent(
         self,
