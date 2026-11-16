@@ -13,6 +13,8 @@ Files:
                      output, parsed output, validation issues, usage, cost;
                      retries; review decisions; node failures
     diagnosis.json / proposals_r<N>.json   accepted outputs
+    review_r<N>.json snapshot when round N reaches human review: served models,
+                     totals (a run paused at review has no summary.json yet)
     summary.json     final status, totals, last proposals (written by finalize)
 """
 
@@ -66,7 +68,13 @@ class RunLogger:
         """Summed tokens and cost over every logged LLM call."""
         calls = [e for e in self.events() if e["kind"] == "llm_call"]
         totals: dict[str, Any] = {"llm_calls": len(calls)}
-        for key in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_creation_tokens"):
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_creation_tokens",
+            "reasoning_tokens",
+        ):
             values = [c["usage"].get(key) for c in calls]
             totals[key] = sum(v for v in values if v is not None)
         costs = [c.get("cost_usd") for c in calls]
@@ -74,3 +82,15 @@ class RunLogger:
             None if any(c is None for c in costs) else round(sum(costs), 6)  # type: ignore[arg-type]
         )
         return totals
+
+    def served_models(self) -> list[str | None]:
+        """Distinct model names the provider reported, in order of first use.
+
+        WHY a list and not one value: a hosted alias can be re-pointed between
+        calls of one run; every distinct name is kept so that is visible.
+        """
+        seen: list[str | None] = []
+        for e in self.events():
+            if e["kind"] == "llm_call" and e.get("served_model") not in seen:
+                seen.append(e.get("served_model"))
+        return seen

@@ -4,14 +4,17 @@ WHY split ``mine_segment`` (pure) from ``write_run`` (I/O): every number is
 produced by a function that can be tested on a 10-case log without touching
 the filesystem; only the final step writes files. Artefact layout (Phase 0
 decision): ``outputs/runs/<run_id>/<segment-slug>/``, plus a run-level
-``evidence.json`` and ``manifest.json`` recording settings and library versions
-so any result can be traced back to how it was produced.
+``evidence.json`` and ``manifest.json`` recording settings, library versions
+and hardware so any result (including a runtime) can be traced back to how it
+was produced.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import platform
+import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
@@ -19,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import psutil
 
 from processpilot.mining.activities import ActivityWaitSummary, compute_activity_waits
 from processpilot.mining.bottlenecks import rank_bottlenecks
@@ -164,6 +168,57 @@ def library_versions(packages: tuple[str, ...] = _VERSIONED_PACKAGES) -> dict[st
     return versions
 
 
+def _cpu_model() -> str:
+    """The CPU's marketing name; ``platform.processor()`` is only a family code on Windows."""
+    try:
+        if sys.platform == "win32":
+            import winreg
+
+            key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+            )
+            return str(winreg.QueryValueEx(key, "ProcessorNameString")[0]).strip()
+        if sys.platform.startswith("linux"):
+            for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or "unknown"
+
+
+def _os_name() -> str:
+    """e.g. ``Windows 11 (10.0.26200)``.
+
+    Python 3.11's ``platform.release()`` says "10" on Windows 11; Windows 11 is
+    the 10.0 kernel from build 22000 on, so the build number decides.
+    """
+    release, build = platform.release(), platform.version()
+    if platform.system() == "Windows" and release == "10":
+        try:
+            if int(build.split(".")[2]) >= 22000:
+                release = "11"
+        except (IndexError, ValueError):
+            pass
+    return f"{platform.system()} {release} ({build})"
+
+
+def hardware_info() -> dict[str, Any]:
+    """OS, CPU, cores and RAM of the machine producing a run.
+
+    WHY: runtimes reported in the thesis (mining minutes, agent latency) are
+    only meaningful together with the machine they were measured on.
+    """
+    return {
+        "os": _os_name(),
+        "machine": platform.machine(),
+        "cpu_model": _cpu_model(),
+        "logical_cores": os.cpu_count(),
+        "physical_cores": psutil.cpu_count(logical=False),
+        "ram_gb": round(psutil.virtual_memory().total / 1024**3, 1),
+    }
+
+
 def new_run_id(now: datetime | None = None) -> str:
     """Sortable, filesystem-safe run id, e.g. ``20261016T143005Z``."""
     return (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
@@ -229,6 +284,7 @@ def write_run(
             "settings": settings.model_dump(),
             "source": source_description or {},
             "library_versions": library_versions(),
+            "hardware": hardware_info(),
         },
     )
     return merged

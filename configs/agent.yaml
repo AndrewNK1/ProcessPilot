@@ -53,12 +53,29 @@ model:
       random_seed: 42
       max_tokens: 16000
     # ChatGoogleGenerativeAI (langchain-google-genai 4.4.2), Gemini API, e.g.
-    # PP_MODEL=google_genai:gemini-2.5-pro; key in GOOGLE_API_KEY. Same
-    # reproducibility caveat as above: seeded, not bit-identical, so logged.
+    # PP_MODEL=google_genai:gemini-3.6-flash; key in GOOGLE_API_KEY.
+    # No temperature/top_p/top_k (user decision 2026-11-16): Google documents
+    # them as "deprecated and ignored" for Gemini 3.6 Flash and later
+    # (https://ai.google.dev/gemini-api/docs/generate-content/whats-new-gemini-3.6,
+    # checked 2026-11-13). Left unset, langchain-google-genai 4.4.2 sends no
+    # temperature for Gemini 3+ models. The seed is still sent; whether it has
+    # any effect is UNVERIFIED (see `notes`), so prompts and raw outputs are logged.
     google_genai:
-      temperature: 0
       seed: 42
       max_output_tokens: 16000
+  # Caveats copied into every run's inputs.json and summary.json for the
+  # provider in use, so a reader of the logs sees what a setting does not do.
+  notes:
+    google_genai:
+      - >-
+        seed=42 is sent; its effect on Gemini output is UNVERIFIED (Google's
+        Gemini 3.6 documentation does not mention seed).
+      - >-
+        temperature, top_p and top_k are not sent: Google documents them as
+        deprecated and ignored for Gemini 3.6 Flash and later.
+      - >-
+        thinking_level is not set, so the provider default applies (Google
+        documents "medium" for gemini-3.6-flash; not confirmed in the response).
   # `json_schema` = the provider's native structured-output mode. Forced tool
   # calling ("function_calling") is rejected by Claude Opus 5.5 / Sonnet 5.5.
   structured_output_method: json_schema
@@ -97,3 +114,11 @@ pricing_usd_per_mtok:
   claude-sonnet-5-5: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write: 2.50}
   claude-sonnet-5: {input: 2.00, output: 10.00, cache_read: 0.20, cache_write: 2.50}
   claude-haiku-5-5: {input: 0.10, output: 0.50, cache_read: 0.01, cache_write: 0.125}
+  # Gemini 3.6 Flash, paid Standard tier, from https://ai.google.dev/gemini-api/docs/pricing
+  # (served at aistudio.google.com/docs/pricing), read 2026-11-16. Output includes
+  # thinking tokens. cache_read = context-caching price (Gemini's implicit caching
+  # reports cached input tokens; there is no separate write charge, so cache_write
+  # = input). These prices hold "through December 31, 2026"; from 2027-01-01 the
+  # page lists 1.50 / 7.50 / 0.15, so update this line before costing later calls.
+  # The free tier is not billed: logged costs are estimates at list price.
+  gemini-3.6-flash: {input: 0.75, output: 3.75, cache_read: 0.075, cache_write: 0.75}

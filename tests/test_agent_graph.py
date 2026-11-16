@@ -81,6 +81,39 @@ def test_valid_path_pauses_for_review_then_approves(run_dir: Path) -> None:
     assert inputs["constraints"]["protected_activities"] == ["Pay Invoice"]
 
 
+def test_run_logs_record_models_hardware_and_cost_basis(run_dir: Path) -> None:
+    runner, _ = _runner(run_dir, [valid_diagnosis(), valid_redesign()])
+    with runner:
+        agent_run_id, _ = runner.start(SEGMENT)
+        log = _log(run_dir, agent_run_id)
+        # A run paused at review has no summary.json yet; the snapshot says what ran.
+        assert not (log.directory / "summary.json").exists()
+        review = json.loads((log.directory / "review_r0.json").read_text(encoding="utf-8"))
+        assert review["status"] == "awaiting_review" and review["round"] == 1
+        assert review["model_id"] == ScriptedLLM.model_id
+        assert review["served_models"] == [None]  # the fake reports no served model
+        assert review["usage"]["llm_calls"] == 2
+        assert review["cost_basis"].startswith("estimated at list price")
+        runner.resume(SEGMENT, agent_run_id, {"decision": "approve", "comment": None})
+
+    summary = json.loads((log.directory / "summary.json").read_text(encoding="utf-8"))
+    assert summary["served_models"] == [None]
+    assert summary["cost_basis"] == review["cost_basis"]
+    assert "reasoning_tokens" in summary["usage"]
+    inputs = json.loads((log.directory / "inputs.json").read_text(encoding="utf-8"))
+    for package in (
+        "langchain-google-genai",
+        "google-genai",
+        "langchain-groq",
+        "langchain-mistralai",
+    ):
+        assert package in inputs["library_versions"]
+    assert set(inputs["hardware"]) >= {"os", "cpu_model", "logical_cores", "ram_gb"}
+    assert inputs["model_notes"] == []  # fixture settings have no notes
+    calls = [e for e in log.events() if e["kind"] == "llm_call"]
+    assert {c["cost_basis"] for c in calls} == {review["cost_basis"]}
+
+
 def test_prompts_contain_evidence_but_no_metrics_dump(run_dir: Path) -> None:
     runner, llm = _runner(run_dir, [valid_diagnosis(), valid_redesign()])
     with runner:

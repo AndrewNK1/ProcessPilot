@@ -165,6 +165,9 @@ def test_write_run_layout_and_manifest(
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["segments"] == {"B": "b", "Group A": "group-a"}
     assert manifest["library_versions"]["pm4py"] != "not installed"
+    hardware = manifest["hardware"]
+    assert hardware["logical_cores"] >= 1 and hardware["ram_gb"] > 0
+    assert hardware["cpu_model"] and hardware["os"]
     assert manifest["evidence_count"] == len(merged.items)
     assert EvidenceStore.from_json(run_dir / "evidence.json") == merged
     assert {i.segment for i in merged.items} == {"Group A", "B"}

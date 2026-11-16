@@ -23,8 +23,11 @@ Four item categories: 3-way match, invoice before GR (221,010 cases);
 - `User` is an exact copy of `org:resource` on 100% of rows (redundant column).
 - `Cumulative net worth (EUR)` is present but unused (possible future value weighting).
 
-**Junk timestamps.** Minimum timestamp 1948-01-26 and values in 2070: sentinel
-values, not real transactions. The documented upper bound (2020-01-01) was
+**Junk timestamps.** 95 timestamps fall before 2017, the earliest 1948-01-26
+(by year: 1948: 10, 1993: 9, 2001: 22, 2008: 45, 2015: 3, 2016: 6; latest
+2016-11-30): sentinel values, not real transactions. None lies after the real
+period (an earlier note here mentioned 2070 dates; re-checked 2026-11-13 on the
+full log, there are none). The documented upper bound (2020-01-01) was
 wrong: the real maximum is 2020-04-09, so a plausible range of
 2017-01-01 to 2020-05-01 is used. Cases with out-of-range timestamps are
 dropped by an explicit, logged cleaning policy, never silently.
@@ -162,12 +165,28 @@ counts as fitting; ProcessPilot counts such cases as non-conforming itself.
   interventions.
 - Human in the loop: the system never executes changes; an analyst approves
   or rejects every proposal.
-- Reproducibility: the model id, prompt version (`p4-v1`), full prompts, raw
-  outputs, token usage, cost and library versions are logged per run. Claude
-  Opus 5.5 rejects sampling parameters, so its output is not bit-reproducible;
-  logging is the substitute.
-- No API key yet: no real LLM run has been made. All agent tests use a
-  scripted fake model.
+- Reproducibility: the model id requested and the model names the provider
+  served, prompt version (`p4-v1`), full prompts, raw outputs, stop/finish
+  reason, token usage (reasoning tokens separately), cost (estimated at list
+  price), library versions and hardware are logged per run; a snapshot
+  (`review_r<N>.json`) is written when a round reaches review, because
+  `summary.json` only exists once a run is finalised. Hosted models are not
+  bit-reproducible, so logging is the substitute: Claude Opus 5.5 rejects
+  sampling parameters, and Google documents temperature/top_p/top_k as
+  "deprecated and ignored" for Gemini 3.6 Flash (checked 2026-11-13), so they
+  are no longer sent (user decision 2026-11-16). The seed (42) is still sent;
+  its effect is UNVERIFIED and every run log says so.
+- Evaluation model: `google_genai:gemini-3.6-flash`, requested directly (user
+  decision 2026-11-16). Earlier runs requested `gemini-3.5-flash` and were
+  served `gemini-3.6-flash`; both names are in their logs.
+- Real runs before the evaluation (development, Gemini, prompt `p4-v1`):
+  2-way match reached review with 2 calls and no retries (15,110 input /
+  6,058 output tokens); 3-way match, invoice before GR (the largest segment)
+  reached review with 4 calls, one retry each in diagnose (3 unsupported
+  numbers) and redesign (1 edit not applicable to the model), 39,920 input /
+  15,623 output tokens, 2 min 46 s. Agent tests use scripted fake models;
+  notebooks and dry runs use the scripted model in `agent/dry_run.py`
+  (`scripted:dry-run`, zero API calls, never offered in the app).
 
 ## 5. Redesign and validation (Phase 4)
 
@@ -448,7 +467,9 @@ check, as before.
 - No reference model for BPI 2019, so there are no model-deviation findings.
 - Woflan does not scale to large models; soundness there rests on construction
   plus the structural check.
-- LLM outputs are not bit-reproducible (Opus 5.5 rejects sampling parameters).
+- LLM outputs are not bit-reproducible (Opus 5.5 rejects sampling parameters;
+  Gemini 3.6 Flash ignores temperature, and whether it honours the seed is
+  UNVERIFIED).
 - pm4py is AGPL v3: ProcessPilot cannot be distributed as closed source.
 - The app is a single-user local tool: no authentication, the analyst name in
   the decision log is self-reported, and background jobs run one at a time in
@@ -472,7 +493,9 @@ check, as before.
 ## 7. Tools and environment
 
 Python 3.11.17; pm4py 2.7.23.11 (AGPL v3); pandas 3.0.6; pydantic 2.14.1;
-LangGraph 1.2.15; langchain 1.4.6; langchain-anthropic 1.7.6; PuLP 3.3.2
+LangGraph 1.2.15; langchain 1.4.6; langchain-anthropic 1.7.6;
+langchain-google-genai 4.4.2 (google-genai 2.34.0); psutil 7.2.2;
+matplotlib 3.11.2; openpyxl 3.1.5; PuLP 3.3.2
 (capped below 4.0: pm4py uses APIs that PuLP 4.0 removes); Graphviz 16.1.0
 (needed for BPMN layout and pictures). Exact set in `requirements.lock`.
 FastAPI 0.162.0, uvicorn 0.54.0. Web app: React 19.3.1, TypeScript 7.0.2,
@@ -480,9 +503,17 @@ Vite 8.3.5, React Router 7.18.4, TanStack Query 5.105.0, bpmn-js 18.31.1,
 lucide-react 1.62.0, Archivo (OFL, via @fontsource-variable/archivo 5.3.0),
 vitest 5.0.5; built with Node 24.11.0 (exact set in `web/package-lock.json`).
 Streamlit 1.66.0 was used until 2026-10-27 and has been uninstalled.
-Runtime: mining all four BPI segments takes about 1.5 min (largest segment
-about 59 s); the 800-case sample about 7 s. Tests: 295 automated Python tests
-(plus 7 TypeScript unit tests for the web app's logic) on
+Hardware: Windows 11 (build 26200), 11th Gen Intel Core i5-1135G7 @ 2.40 GHz
+(4 cores, 8 logical), 7.7 GB RAM; since 2026-11-16 every mining manifest and
+agent run log records the hardware it ran on.
+Runtime (measured by the app's job log on that laptop): mining all four BPI
+segments took 92 to 184 s over 9 runs between 2026-10-26 and 2026-11-11
+(92, 94, 167, 169, 166, 172, 93, 95, 184 s in date order; median 166 s). The
+spread has no recorded cause (other load on the laptop is not logged); the
+800-case sample took 5 s. A full agent run to review took 75 s (2-way match, 2
+calls) and 173 s (invoice before GR, 4 calls), almost all of it model latency.
+Tests: 520 automated Python tests (2026-11-16; plus 7 TypeScript unit tests for
+the web app's logic) on
 hand-built logs with known answers and on the committed sample (including the
 API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 2019 tests are opt-in.
@@ -516,3 +547,7 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | Front end | Visual world "Ticket Wallet" chosen after one re-roll; palette refined (no purple) |
 | 2026-11-02 | The agent runs only on a real LLM; there is no rule-based stand-in or baseline model |
 | 2026-11-02 | BPMN drawings must be compact: no gateways that decide nothing |
+| 2026-11-16 | Gemini: no temperature/top_p/top_k sent (ignored by the model); seed 42 kept, effect labelled UNVERIFIED |
+| 2026-11-16 | Evaluation model requested directly as `google_genai:gemini-3.6-flash` |
+| 2026-11-16 | A scripted dry-run model exists for notebooks and evaluation dry runs only (zero API calls); the app still runs only on a real LLM |
+| 2026-11-16 | Second-dataset notebook (04) dropped from the thesis and deleted |

@@ -34,9 +34,12 @@ class TokenUsage(BaseModel):
     """Token counts as reported by the provider (``None`` = not reported)."""
 
     input_tokens: int | None = None
+    # Includes reasoning ("thinking") tokens where the provider bills them as
+    # output (Gemini); ``reasoning_tokens`` is the part of it spent thinking.
     output_tokens: int | None = None
     cache_read_tokens: int | None = None
     cache_creation_tokens: int | None = None
+    reasoning_tokens: int | None = None
 
 
 class LLMResponse(BaseModel):
@@ -59,6 +62,11 @@ class StructuredLLM(Protocol):
     def invoke(self, turns: list[ChatTurn], schema: type[BaseModel]) -> LLMResponse:
         """One model call; never raises on unparseable output."""
         ...
+
+
+# Logged next to every cost: prices come from configs/agent.yaml, not from a bill
+# (the Gemini free tier is not billed at all).
+COST_BASIS = "estimated at list price (configs/agent.yaml pricing_usd_per_mtok)"
 
 
 def cost_usd(usage: TokenUsage, price: Price | None) -> float | None:
@@ -189,9 +197,12 @@ class LangChainLLM:
         meta = getattr(raw, "response_metadata", {}) or {}
         um = getattr(raw, "usage_metadata", None) or {}
         details = um.get("input_token_details") or {}
+        out_details = um.get("output_token_details") or {}
         parsed = result.get("parsed")
         error = result.get("parsing_error")
-        stop = meta.get("stop_reason")
+        # Anthropic reports `stop_reason`, Gemini/OpenAI-style APIs `finish_reason`;
+        # without the second, a Gemini reply cut off at MAX_TOKENS went unnoticed.
+        stop = meta.get("stop_reason") or meta.get("finish_reason")
         if parsed is None and error is None:
             error = f"model returned no parseable output (stop_reason={stop})"
         return LLMResponse(
@@ -206,5 +217,6 @@ class LangChainLLM:
                 output_tokens=um.get("output_tokens"),
                 cache_read_tokens=details.get("cache_read"),
                 cache_creation_tokens=details.get("cache_creation"),
+                reasoning_tokens=out_details.get("reasoning"),
             ),
         )

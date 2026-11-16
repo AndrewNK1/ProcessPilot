@@ -55,3 +55,6 @@ desktop.ini
 # Dependencies are restored with `npm ci`; the build in src/processpilot/api/static
 # is committed on purpose, so the app runs with Python alone.
 web/node_modules/
+
+# --- exported Claude Code transcripts (e.g. 2026-10-24-211429-<topic>.txt) ----
+/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]-*.txt

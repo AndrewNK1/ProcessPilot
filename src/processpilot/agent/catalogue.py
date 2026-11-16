@@ -113,6 +113,13 @@ class ModelSettings(BaseModel):
     env_var: str
     init_kwargs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     structured_output_method: str
+    # Per provider: caveats about what the settings do not guarantee (e.g. a
+    # seed with unverified effect). Logged with every run, never sent.
+    notes: dict[str, list[str]] = Field(default_factory=dict)
+
+    def notes_for(self, model_id: str) -> list[str]:
+        """The logged caveats for the provider of ``model_id`` (may be empty)."""
+        return self.notes.get(model_id.split(":", 1)[0], [])
 
     def kwargs_for(self, model_id: str) -> dict[str, Any]:
         """The kwargs for ``"<provider>:<model>"``; unknown provider fails loudly."""

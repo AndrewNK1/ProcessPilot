@@ -15,13 +15,16 @@ a stable evidence ID; claims citing unknown IDs are rejected and retried.
 ## Setup (PowerShell)
 
 ```powershell
-# 1. Create the Python 3.11 environment (see Phase 0 notes for interpreter choice)
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# 1. Create the Python 3.11 environment with conda, as a folder in the project.
+#    A conda environment has its interpreter at .\.venv\python.exe (there is no
+#    Scripts\Activate.ps1); every command below calls that interpreter directly.
+conda create -p .\.venv python=3.11 -y
 
 # 2. Install, editable, with the dev extras (the web app is already built; no Node needed)
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+.\.venv\python.exe -m pip install --upgrade pip
+.\.venv\python.exe -m pip install -e ".[dev]"
+# Exact tested set, if the ranged install ever drifts:
+# .\.venv\python.exe -m pip install -r requirements.lock
 
 # 3. Point the tool at your data and model
 Copy-Item .env.example .env   # then edit .env
@@ -30,10 +33,10 @@ Copy-Item .env.example .env   # then edit .env
 winget install --id Graphviz.Graphviz   # then add C:\Program Files\Graphviz\bin to PATH
 ```
 
-`.env` is gitignored. Set `PP_MODEL` to `anthropic:claude-opus-5-5` and
-`ANTHROPIC_API_KEY`; the agent needs a model and its key, everything else runs
-offline. Without Graphviz the pipeline still runs, but BPMN diagrams have no
-layout.
+`.env` is gitignored. Set `PP_MODEL` (the evaluation uses
+`google_genai:gemini-3.6-flash`) and the matching key (`GOOGLE_API_KEY`); the
+agent needs a model and its key, everything else runs offline. Without
+Graphviz the pipeline still runs, but BPMN diagrams have no layout.
 
 ## Run the app
 
@@ -64,8 +67,8 @@ up in the app automatically.
 ## Checks
 
 ```powershell
-ruff check .
-pytest
+.\.venv\python.exe -m ruff check .
+.\.venv\python.exe -m pytest
 # web app (needs Node 22+): type check and unit tests
 cd web; npm ci; npm run check; npm test
 ```
@@ -95,7 +98,7 @@ alone; rebuild and commit it after every UI change.
 | `configs/` | dataset presets, heuristics catalogue, agent and app settings |
 | `data/sample/` | committed 800-case BPI 2019 sample (preset `bpi2019_sample`) |
 | `scripts/` | `run_app.ps1` (start the app), `make_bpi_sample.py` |
-| `notebooks/` | per-phase evaluation notebooks |
+| `notebooks/` | 01 ingest/validate, 02 mining per segment, 03 agent run (scripted dry-run model by default) |
 
 ## Design principles
 

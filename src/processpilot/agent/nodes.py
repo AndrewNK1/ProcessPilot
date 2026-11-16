@@ -28,6 +28,7 @@ from pydantic import BaseModel, ValidationError
 
 from processpilot.agent.catalogue import AgentSettings, DomainKnowledge, HeuristicCatalogue
 from processpilot.agent.llm import (
+    COST_BASIS,
     ChatTurn,
     StructuredLLM,
     bare_model_name,
@@ -60,7 +61,7 @@ from processpilot.agent.validation import (
     validate_diagnosis,
     validate_redesign,
 )
-from processpilot.mining.run import CASE_WAITS_FILE, library_versions
+from processpilot.mining.run import CASE_WAITS_FILE, hardware_info, library_versions
 from processpilot.process_tree import TreeNode
 from processpilot.redesign.bpmn_edit import apply_proposal, write_to_be
 from processpilot.redesign.operations import EditError
@@ -81,6 +82,11 @@ _AGENT_PACKAGES = (
     "anthropic",
     "langchain-ollama",
     "ollama",
+    "langchain-google-genai",
+    "google-genai",
+    "langchain-groq",
+    "groq",
+    "langchain-mistralai",
     "pm4py",
     "pulp",
 )
@@ -197,6 +203,7 @@ def _call_validated(
             issues=[i.model_dump() for i in issues],
             usage=resp.usage.model_dump(),
             cost_usd=cost_usd(resp.usage, price),
+            cost_basis=COST_BASIS,
         )
         if not issues and parsed is not None:
             return parsed, []
@@ -241,6 +248,7 @@ def load_evidence(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             "model_id": ctx.llm.model_id,
             "model_fingerprint": model_fingerprint(ctx.llm.model_id),
             "model_settings": ctx.settings.model.model_dump(),
+            "model_notes": ctx.settings.model.notes_for(ctx.llm.model_id),
             "max_retries": ctx.settings.max_retries,
             "max_revision_loops": ctx.settings.max_revision_loops,
             "prompt_version": PROMPT_VERSION,
@@ -254,6 +262,7 @@ def load_evidence(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             if ctx.domain is None
             else {"domain": ctx.domain.domain, "version": ctx.domain.version},
             "library_versions": library_versions(_AGENT_PACKAGES),
+            "hardware": hardware_info(),
             "started_at": utc_now(),
         },
     )
@@ -406,7 +415,33 @@ def validate(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             )
         )
     ctx.logger.event("node", node="validate", results=[r.model_dump(mode="json") for r in results])
+    # Written here, not in human_review: that node re-runs from the top on
+    # resume, so it must not write anything before its interrupt.
+    ctx.logger.write_json(
+        f"review_r{state.revision_count}.json",
+        {
+            "run_id": state.run_id,
+            "agent_run_id": state.agent_run_id,
+            "segment": state.segment,
+            "status": "awaiting_review",
+            "round": len(state.review_history) + 1,
+            **_model_record(ctx),
+            "usage": ctx.logger.usage_totals(),
+            "reached_review_at": utc_now(),
+        },
+    )
     return {"validation_results": results, "status": "awaiting_review"}
+
+
+def _model_record(ctx: AgentContext) -> dict[str, Any]:
+    """Requested vs served model, caveats and cost basis, for the snapshot files."""
+    return {
+        "model_id": ctx.llm.model_id,
+        "served_models": ctx.logger.served_models(),
+        "model_notes": ctx.settings.model.notes_for(ctx.llm.model_id),
+        "prompt_version": PROMPT_VERSION,
+        "cost_basis": COST_BASIS,
+    }
 
 
 def _case_waits(ctx: AgentContext) -> pd.DataFrame | None:
@@ -467,8 +502,7 @@ def finalize(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             "segment": state.segment,
             "status": state.status,
             "error": state.error,
-            "model_id": ctx.llm.model_id,
-            "prompt_version": PROMPT_VERSION,
+            **_model_record(ctx),
             "revision_count": state.revision_count,
             "review_history": [r.model_dump() for r in state.review_history],
             "warnings": [w.model_dump() for w in state.warnings],

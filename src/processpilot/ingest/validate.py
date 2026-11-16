@@ -7,7 +7,8 @@ removal is recorded in the report that accompanies the results.
 
 Checks: nulls in required columns; unparseable timestamps (kept apart from
 missing ones via ``timestamp_raw``); timestamps outside a configured plausible
-range (BPI 2019 contains 1948 and 2070 dates); single-event cases; duplicate
+range (e.g. sentinel or default dates far from the log's real period);
+single-event cases; duplicate
 events; non-monotonic timestamps within a case in the log's row order (i.e.
 the canonical sort guarantee is broken); timestamp ties within a case (these
 make directly-follows order ambiguous, so they bound the trustworthiness of
@@ -177,7 +178,7 @@ def validate(
                         severity="error",
                         message=(
                             f"{int(out_mask.sum())} timestamp(s) fall outside the plausible "
-                            f"range [{lo}, {hi}] (e.g. BPI 2019's junk 1948/2070 dates)."
+                            f"range [{lo}, {hi}]."
                         ),
                         count=int(out_mask.sum()),
                         share=float(out_mask.mean()),
