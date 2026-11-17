@@ -15,9 +15,22 @@ Persisted as JSON next to the run's other artefacts; the query methods on
 ID scheme: ``<PREFIX>-<rank:02d>-<segment-slug>``; conformance items use the
 rule id instead of a rank (``CF-R-02-<slug>``) so a rule keeps its ID when
 other rules are added. Prefixes: BN bottleneck, AW wait before an activity,
-VA variant, RW rework, RS resource workload, HO handover, CF conformance rule,
-CM conformance to the reference model (``CM-00`` = overall result or "not
-performed", ``CM-01..`` = ranked deviations), KPI segment KPIs.
+VA variant, RW rework, RS resource workload (people only), HO handover
+(between two different people), RT resource type (numbered by type, not
+rank: RT-01 human, RT-02 batch, RT-03 unassigned), ST system/vendor
+transition (a batch job or no recorded user on either side), CF conformance
+rule, CM conformance to the reference model (``CM-00`` = overall result or
+"not performed", ``CM-01..`` = ranked deviations), KPI segment KPIs.
+
+``EVIDENCE_SCHEMA_VERSION`` is stored in every ``evidence.json`` and
+``manifest.json`` so runs whose items mean different things can be told
+apart by a field. History:
+
+1. (unversioned files, up to 2026-11-17) every resource value counted as a
+   person: batch jobs and ``NONE`` were ranked in RS-*, and any change of
+   resource value was a handover in HO-*.
+2. (2026-11-17, evaluation Phase 2) resource types: RS-* people only; HO-*
+   between two different people; new RT-* and ST-* items.
 """
 
 from __future__ import annotations
@@ -29,18 +42,24 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from processpilot.ingest.resource_types import RESOURCE_TYPES
 from processpilot.mining.activities import ActivityWait
 from processpilot.mining.bottlenecks import Bottleneck
 from processpilot.mining.conformance import ConformanceResult
 from processpilot.mining.kpis import SegmentKPIs
 from processpilot.mining.reference import ReferenceConformance
-from processpilot.mining.resources import ResourceAnalysis
+from processpilot.mining.resources import TYPE_LABELS, ResourceAnalysis
 from processpilot.mining.rework import ReworkItem
 from processpilot.mining.variants import VariantSummary
 
 EvidenceType = Literal[
     "bottleneck", "activity", "variant", "rework", "resource", "conformance", "kpi"
 ]
+
+# Bump when the meaning of an evidence item changes; see the module docstring.
+EVIDENCE_SCHEMA_VERSION = 2
+# What a file without the field is: written before versioning existed.
+UNVERSIONED_SCHEMA = 1
 
 _SECONDS_PER_MINUTE = 60
 _SECONDS_PER_HOUR = 3600
@@ -62,6 +81,14 @@ class EvidenceStore(BaseModel):
     """All evidence of a run, with the read-only queries the agent tools wrap."""
 
     items: list[EvidenceItem] = []
+    # None only when loaded from a file written before versioning (= schema 1);
+    # see ``schema_version``. Mining always sets it.
+    evidence_schema_version: int | None = None
+
+    @property
+    def schema_version(self) -> int:
+        """The schema this store's items follow (1 for unversioned files)."""
+        return self.evidence_schema_version or UNVERSIONED_SCHEMA
 
     def get(self, evidence_id: str) -> EvidenceItem:
         """The item with ``evidence_id``; ``KeyError`` if it does not exist."""
@@ -98,7 +125,12 @@ class EvidenceStore(BaseModel):
         clash = set(self.ids()) & set(other.ids())
         if clash:
             raise ValueError(f"duplicate evidence ids: {sorted(clash)}")
-        return EvidenceStore(items=[*self.items, *other.items])
+        filled = [s for s in (self, other) if s.items]
+        versions = sorted({s.schema_version for s in filled})
+        if len(versions) > 1:
+            raise ValueError(f"cannot merge evidence of schema versions {versions}")
+        version = (filled[0] if filled else self).evidence_schema_version
+        return EvidenceStore(items=[*self.items, *other.items], evidence_schema_version=version)
 
     def to_json(self, path: Path) -> None:
         """Write the store as indented JSON (deterministic for identical input)."""
@@ -274,7 +306,7 @@ def build_segment_evidence(
             )
         )
     items.extend(_reference_evidence(segment, slug, reference))
-    return EvidenceStore(items=items)
+    return EvidenceStore(items=items, evidence_schema_version=EVIDENCE_SCHEMA_VERSION)
 
 
 def _filter_note(kpis: SegmentKPIs) -> str:
@@ -366,6 +398,26 @@ def _reference_evidence(segment: str, slug: str, ref: ReferenceConformance) -> l
     return items
 
 
+def _count(n: int, word: str, plural: str | None = None) -> str:
+    """``1 activity`` / ``3 activities``."""
+    return f"{n:,} {word if n == 1 else plural or word + 's'}"
+
+
+def _type_phrase(t: str, distinct: int) -> str:
+    """How a resource type is named in evidence text."""
+    if t == "human":
+        return f"People (human resources, {distinct:,} distinct)"
+    if t == "batch":
+        return f"Batch jobs ({_count(distinct, 'distinct system account')})"
+    return f"Events with no user recorded ({_count(distinct, 'distinct placeholder value')})"
+
+
+def _kind_phrase(kind: str) -> str:
+    """``"unassigned -> human"`` -> ``"no user recorded -> person"``."""
+    src, dst = kind.split(" -> ")
+    return f"{TYPE_LABELS[src]} -> {TYPE_LABELS[dst]}"
+
+
 def _resource_evidence(
     segment: str, slug: str, res: ResourceAnalysis, bn_ids: dict[tuple[str, str], str]
 ) -> list[EvidenceItem]:
@@ -382,25 +434,75 @@ def _resource_evidence(
                 metrics={"available": False, "skipped_reason": res.skipped_reason},
             )
         ]
+    assumed = (
+        ""
+        if res.resource_types_configured
+        else " Resource types are assumed, not configured: every recorded resource counts "
+        "as a person."
+    )
+    rt_ids = {
+        t.type: f"RT-{RESOURCE_TYPES.index(t.type) + 1:02d}-{slug}" for t in res.type_summaries
+    }
+    st_ids = [f"ST-{t.rank:02d}-{slug}" for t in res.system_transitions]
     items = [
         EvidenceItem(
             id=f"HO-00-{slug}",
             segment=segment,
             type="resource",
             summary=(
-                "Across all transitions, the median wait is "
-                f"{format_duration(res.median_handover_wait_seconds)} when the resource changes "
-                f"and {format_duration(res.median_same_resource_wait_seconds)} when it does not "
-                f"({res.unassigned_event_count:,} events have no resource)."
+                "A handover here is a step between two different people. Its median wait is "
+                f"{format_duration(res.median_handover_wait_seconds)} "
+                f"({res.handover_transition_count:,} transitions) vs "
+                f"{format_duration(res.median_same_resource_wait_seconds)} when the same person "
+                f"continues ({res.same_resource_transition_count:,}). "
+                f"{res.system_transition_count:,} transitions involve a batch job or no user "
+                "recorded (median wait "
+                f"{format_duration(res.median_system_transition_wait_seconds)}); they are "
+                f"system/vendor transitions, not handovers.{assumed}"
             ),
             metrics={
                 "available": True,
+                "handover_definition": (
+                    "consecutive events of a case by two different human resources; steps "
+                    "involving batch or unassigned resources are system/vendor transitions"
+                ),
+                "resource_types_configured": res.resource_types_configured,
+                "resource_type_rules": res.resource_type_rules,
                 "median_handover_wait_seconds": res.median_handover_wait_seconds,
                 "median_same_resource_wait_seconds": res.median_same_resource_wait_seconds,
+                "handover_transition_count": res.handover_transition_count,
+                "same_resource_transition_count": res.same_resource_transition_count,
+                "system_transition_count": res.system_transition_count,
+                "median_system_transition_wait_seconds": (
+                    res.median_system_transition_wait_seconds
+                ),
                 "unassigned_event_count": res.unassigned_event_count,
             },
+            refs=[*rt_ids.values(), *st_ids],
         )
     ]
+    for t in res.type_summaries:
+        acts = ", ".join(f"'{a.activity}' ({a.event_count:,})" for a in t.top_activities)
+        role = (
+            "ranked in RS-*; changes between two of them are handovers (HO-*)"
+            if t.type == "human"
+            else "not people, so not ranked by workload and never part of a handover"
+        )
+        note = assumed if t.type == "human" else ""
+        items.append(
+            EvidenceItem(
+                id=rt_ids[t.type],
+                segment=segment,
+                type="resource",
+                summary=(
+                    f"{_type_phrase(t.type, t.distinct_resources)} record "
+                    f"{_pct(t.event_share)} of events ({t.event_count:,}) in "
+                    f"{_pct(t.case_share)} of cases; {role}. Most frequent activities: "
+                    f"{acts}.{note}"
+                ),
+                metrics={**t.model_dump(), "rules": res.resource_type_rules},
+            )
+        )
     for w in res.workload:
         items.append(
             EvidenceItem(
@@ -408,11 +510,14 @@ def _resource_evidence(
                 segment=segment,
                 type="resource",
                 summary=(
-                    f"Resource '{w.resource}' records {_pct(w.event_share)} of events "
-                    f"({w.event_count:,}) across {w.case_count:,} cases and "
-                    f"{w.distinct_activities} distinct activities; workload rank {w.rank}."
+                    f"Person '{w.resource}' records {_pct(w.event_share)} of events "
+                    f"({w.event_count:,}; {_pct(w.human_event_share)} of events by people) "
+                    f"across {_count(w.case_count, 'case')} and "
+                    f"{_count(w.distinct_activities, 'distinct activity', 'distinct activities')}; "
+                    f"workload rank {w.rank} among people."
                 ),
                 metrics=w.model_dump(),
+                refs=[rt_ids["human"]] if "human" in rt_ids else [],
             )
         )
     for h in res.handovers:
@@ -424,12 +529,33 @@ def _resource_evidence(
                 type="resource",
                 summary=(
                     f"On '{h.source}' -> '{h.target}', {_pct(h.handover_share_of_transitions)} of "
-                    f"transitions hand over to a different resource ({_pct(h.handover_case_share)}"
-                    f" of cases); median wait {format_duration(h.median_handover_wait_seconds)} "
-                    f"with handover vs {format_duration(h.median_same_resource_wait_seconds)} "
-                    f"without; handover impact rank {h.rank}."
+                    f"transitions hand over to a different person ({_pct(h.handover_case_share)}"
+                    f" of cases) and {_pct(h.system_transition_share_of_transitions)} involve a "
+                    "batch job or no user recorded; median wait "
+                    f"{format_duration(h.median_handover_wait_seconds)} with handover vs "
+                    f"{format_duration(h.median_same_resource_wait_seconds)} when the same "
+                    f"person continues; handover impact rank {h.rank}."
                 ),
                 metrics=h.model_dump(),
+                refs=[bn_ref] if bn_ref else [],
+            )
+        )
+    for t, st_id in zip(res.system_transitions, st_ids, strict=True):
+        bn_ref = bn_ids.get((t.source, t.target))
+        items.append(
+            EvidenceItem(
+                id=st_id,
+                segment=segment,
+                type="resource",
+                summary=(
+                    f"On '{t.source}' -> '{t.target}', {_pct(t.share_of_transitions)} of "
+                    f"transitions ({t.transition_count:,}, {_pct(t.case_share)} of cases) involve "
+                    f"a batch job or no user recorded, mostly {_kind_phrase(t.dominant_kind)} "
+                    f"({_pct(t.dominant_kind_share)}); median wait "
+                    f"{format_duration(t.median_wait_seconds)}. A system/vendor transition, not "
+                    f"a handover between people; impact rank {t.rank}."
+                ),
+                metrics=t.model_dump(),
                 refs=[bn_ref] if bn_ref else [],
             )
         )

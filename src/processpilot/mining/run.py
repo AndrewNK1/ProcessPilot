@@ -28,7 +28,12 @@ from processpilot.mining.activities import ActivityWaitSummary, compute_activity
 from processpilot.mining.bottlenecks import rank_bottlenecks
 from processpilot.mining.conformance import check_rules
 from processpilot.mining.discovery import DFGResult, compute_dfg
-from processpilot.mining.evidence import EvidenceStore, build_segment_evidence, segment_slug
+from processpilot.mining.evidence import (
+    EVIDENCE_SCHEMA_VERSION,
+    EvidenceStore,
+    build_segment_evidence,
+    segment_slug,
+)
 from processpilot.mining.filtering import filter_variants
 from processpilot.mining.kpis import compute_kpis
 from processpilot.mining.prepare import collapse_same_instant_repeats, event_waits
@@ -131,7 +136,15 @@ def mine_segment(
         bottlenecks=rank_bottlenecks(dfg, a.top_n_bottlenecks),
         variants=analyse_variants(mining_df, a.top_n_variants, a.max_example_cases),
         rework=analyse_rework(mining_df, a.top_n_rework, a.max_example_cases),
-        resources=analyse_resources(raw_df, mining_df, a.top_n_resources, a.top_n_handovers),
+        resources=analyse_resources(
+            raw_df,
+            mining_df,
+            a.top_n_resources,
+            a.top_n_handovers,
+            top_n_system_transitions=a.top_n_system_transitions,
+            top_n_type_activities=a.top_n_resource_type_activities,
+            resource_types=settings.resource_types,
+        ),
         conformance=check_rules(
             mining_df,
             segment,
@@ -251,7 +264,7 @@ def write_run(
     if len(set(slugs)) != len(slugs):
         raise ValueError(f"segment names collide after slugifying: {slugs}")
 
-    merged = EvidenceStore()
+    merged = EvidenceStore(evidence_schema_version=EVIDENCE_SCHEMA_VERSION)
     for result, slug in zip(results, slugs, strict=True):
         seg_dir = run_dir / slug
         seg_dir.mkdir(parents=True, exist_ok=True)
@@ -278,6 +291,9 @@ def write_run(
         {
             "run_id": run_dir.name,
             "created_at": datetime.now(UTC).isoformat(),
+            # What the evidence items mean (mining/evidence.py history); runs
+            # without this field predate versioning and follow schema 1.
+            "evidence_schema_version": EVIDENCE_SCHEMA_VERSION,
             "segments": {r.segment: s for r, s in zip(results, slugs, strict=True)},
             "evidence_count": len(merged.items),
             "bpmn_layout": "graphviz" if auto_layout else "none (graphviz 'dot' not on PATH)",

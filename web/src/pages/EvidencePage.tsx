@@ -14,7 +14,8 @@ import { readScope, useSettings, writeScope } from "../hooks";
 import { bottleneckIds, defaultRank, legs, paths } from "../journey";
 import { Itinerary } from "../Itinerary";
 import { BpmnView } from "../BpmnView";
-import { ApiProblem, Kpis, Notice, Tabs, Tag } from "../ui";
+import { ApiProblem, Kpis, Notice, ResourceTypesTable, Tabs, Tag } from "../ui";
+import { schemaIsLegacy, schemaLabel } from "../resourceTypes";
 
 /** Resolve run and segment from the URL, else the remembered scope, else the newest run. */
 export function useRunScope(base: "evidence" | "redesign") {
@@ -125,7 +126,9 @@ function SegmentEvidence({ run, segment, mined }: { run: Run; segment: Segment; 
     <>
       <div className="page-head">
         <div>
-          <div className="crumb">Evidence · run {run.run_id}</div>
+          <div className="crumb">
+            Evidence · run {run.run_id} · {schemaLabel(run.evidence_schema_version)}
+          </div>
           <h1>{segment.name}</h1>
           <p className="finding">
             {worst ? (
@@ -165,6 +168,14 @@ function SegmentEvidence({ run, segment, mined }: { run: Run; segment: Segment; 
             }),
           ]}
         />
+      )}
+
+      {schemaIsLegacy(run.evidence_schema_version) && (
+        <Notice tone="wait">
+          This run was mined with {schemaLabel(run.evidence_schema_version)}: batch jobs and events with no user
+          recorded are counted as people in its workload (RS) and handover (HO) findings. Mine the log again for the
+          current definitions.
+        </Notice>
       )}
 
       {items.data && (
@@ -498,6 +509,7 @@ function RunQuality({ run }: { run: Run }) {
         ) : (
           <p className="small">Nothing was removed before mining.</p>
         )}
+        {q.resource_types && <ResourceTypesTable breakdown={q.resource_types} />}
       </div>
     </details>
   );

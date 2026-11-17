@@ -11,6 +11,7 @@ from processpilot.mining.resources import analyse_resources
 from processpilot.mining.settings import ConformanceRule, MiningSettings
 
 H = 3600.0
+CAPS = {"top_n_system_transitions": 10, "top_n_type_activities": 5}
 
 
 @pytest.fixture
@@ -19,7 +20,7 @@ def view(mining_log: pd.DataFrame) -> pd.DataFrame:
 
 
 def test_workload_counts_raw_events(mining_log: pd.DataFrame, view: pd.DataFrame) -> None:
-    res = analyse_resources(mining_log, view, top_n_resources=10, top_n_handovers=10)
+    res = analyse_resources(mining_log, view, top_n_resources=10, top_n_handovers=10, **CAPS)
     assert [(w.resource, w.event_count, w.case_count) for w in res.workload] == [
         ("r1", 9, 5),
         ("r2", 8, 5),
@@ -29,13 +30,13 @@ def test_workload_counts_raw_events(mining_log: pd.DataFrame, view: pd.DataFrame
 
 
 def test_handover_vs_same_resource_waits(mining_log: pd.DataFrame, view: pd.DataFrame) -> None:
-    res = analyse_resources(mining_log, view, top_n_resources=10, top_n_handovers=10)
+    res = analyse_resources(mining_log, view, top_n_resources=10, top_n_handovers=10, **CAPS)
     assert res.median_handover_wait_seconds == 2 * H
     assert res.median_same_resource_wait_seconds == 1.5 * H
 
 
 def test_handover_edges_ranked_by_impact(mining_log: pd.DataFrame, view: pd.DataFrame) -> None:
-    res = analyse_resources(mining_log, view, top_n_resources=10, top_n_handovers=10)
+    res = analyse_resources(mining_log, view, top_n_resources=10, top_n_handovers=10, **CAPS)
     assert [(h.source, h.target) for h in res.handovers] == [("A", "C"), ("B", "C"), ("A", "B")]
     bc = res.handovers[1]
     assert (bc.handover_count, bc.handover_case_count) == (3, 3)
@@ -47,7 +48,7 @@ def test_handover_edges_ranked_by_impact(mining_log: pd.DataFrame, view: pd.Data
 
 def test_resources_skipped_explicitly_without_resource_column(view: pd.DataFrame) -> None:
     no_res = view.drop(columns=["resource"])
-    res = analyse_resources(no_res, no_res, top_n_resources=10, top_n_handovers=10)
+    res = analyse_resources(no_res, no_res, top_n_resources=10, top_n_handovers=10, **CAPS)
     assert not res.available
     assert "no resource column" in (res.skipped_reason or "")
     assert res.workload == [] and res.handovers == []

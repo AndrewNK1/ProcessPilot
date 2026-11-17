@@ -98,6 +98,34 @@ evidence text says so.
 also crosses a department, so handover and bottleneck findings overlap; they
 cross-reference each other.
 
+**Resource types (evidence schema 2, 2026-11-17).** The resource column of BPI
+2019 is not a list of people. On the full log (1,595,923 events), `user_###`
+= 607 values and 65.2% of events (people), `batch_##` = 20 values and 9.8%
+(batch jobs), and `NONE` = 1 value and 25.0% (no user recorded, mostly
+vendor-side steps). After cleaning, the shares are 65.2 / 9.8 / 25.0% of
+1,593,429 events. Resources are therefore classified first, by preset rules
+(regular expressions or exact values; empty values are always "unassigned";
+a value matched by two types is a configuration error). Workload (RS) ranks
+people only. A handover (HO) is a step between two different people, compared
+with the same person continuing. Steps with a batch job or no recorded user on
+either side are reported separately as system/vendor transitions (ST), with
+their direction (e.g. "no user recorded -> person"). Each type gets a summary
+item (RT) with its share of events and top activities. The data-quality
+report carries the same breakdown, recomputed after cleaning. On the 800-case
+sample, segment "3-way match, invoice before GR", the old definition ranked
+`NONE` as the busiest "resource" (RS-01, 17.2% of events) and two batch
+accounts among the top 15. Its HO-00 compared 4.3 days (resource changes)
+with 10.6 h (same resource), and three of its ten handover edges were vendor
+steps ("Vendor creates invoice" -> ...). Under the new definition, HO-00
+compares 11.9 days (two different people, 397 steps) with 11.2 h (same
+person, 54 steps). 473 steps involve a batch job or no user (median
+2.4 days). All non-resource evidence is unchanged (171 items identical). The
+evidence digest the model reads grows by 17-33% per segment (+2.3k to +5.8k
+characters, about +0.7k to +1.8k input tokens per call, estimated at 3.2
+characters per token from the logged Gemini calls). Every `evidence.json`
+and `manifest.json` now carries `evidence_schema_version` (2). Files without
+it are schema 1, and the UI flags such runs.
+
 **Variants.** Top-N with case share and throughput; the "happy path" is the
 most frequent variant, not necessarily the best. An optional variant filter
 (top-k / coverage / minimum share) exists; by default it affects only the
@@ -460,6 +488,14 @@ check, as before.
 - The estimate ignores queueing, capacity and resource contention;
   removal effects are upper bounds; the automation % is an assumption.
 - Rework extra time is association, not causation.
+- Resource types come from naming patterns in the log (`user_`, `batch_`,
+  `NONE`), not from an HR or system register. A batch account run on a
+  person's behalf, or a shared login, would be misclassified. "No user
+  recorded" also hides who did vendor-side steps, so their waits cannot be
+  attributed to anyone.
+- Development runs mined before 2026-11-17 (evidence schema 1) count batch
+  jobs and `NONE` as people in RS/HO; figures from them must not be quoted for
+  resources.
 - Conformance rules are hand-written domain rules; a wrong rule produces false
   findings (R-02 lesson).
 - Open cases at extraction bias "missing activity" counts; partly handled by
@@ -512,7 +548,7 @@ segments took 92 to 184 s over 9 runs between 2026-10-26 and 2026-11-11
 spread has no recorded cause (other load on the laptop is not logged); the
 800-case sample took 5 s. A full agent run to review took 75 s (2-way match, 2
 calls) and 173 s (invoice before GR, 4 calls), almost all of it model latency.
-Tests: 520 automated Python tests (2026-11-16; plus 7 TypeScript unit tests for
+Tests: 542 automated Python tests (2026-11-17; plus 9 TypeScript unit tests for
 the web app's logic) on
 hand-built logs with known answers and on the committed sample (including the
 API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
@@ -551,3 +587,7 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | 2026-11-16 | Evaluation model requested directly as `google_genai:gemini-3.6-flash` |
 | 2026-11-16 | A scripted dry-run model exists for notebooks and evaluation dry runs only (zero API calls); the app still runs only on a real LLM |
 | 2026-11-16 | Second-dataset notebook (04) dropped from the thesis and deleted |
+| 2026-11-17 | Gemini `thinking_level` pinned to "medium" (Google's current default), logged per run |
+| 2026-11-17 | Resource types: workload ranks people only; a handover is between two different people; batch / no-user steps are system/vendor transitions (ST); empty values count as unassigned |
+| 2026-11-17 | HO shares stay over all transitions of the edge, with the ST share beside them |
+| 2026-11-17 | `evidence_schema_version` in every evidence.json and manifest.json (2 = resource types), shown in the UI |

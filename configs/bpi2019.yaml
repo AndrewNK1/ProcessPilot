@@ -92,6 +92,10 @@ analysis:
   top_n_rework: 10
   top_n_resources: 15
   top_n_handovers: 10
+  # Transitions with a batch job or no recorded user on either side (ST-*),
+  # ranked like handovers; and the activities listed per resource type (RT-*).
+  top_n_system_transitions: 10
+  top_n_resource_type_activities: 5
   # Waiting time before each activity (AW-* evidence). The full table for
   # every activity is always written to activity_waits.json; this only caps
   # what the agent reads. 10 of 42 activities keeps the digest small.
@@ -100,6 +104,20 @@ analysis:
   # reference model is configured.
   top_n_model_deviations: 10
   max_example_cases: 5
+
+# --- resource types (ingest/resource_types.py) -----------------------------
+# org:resource mixes people with system accounts (verified on the full log,
+# Phase 0): user_### = 607 values, 65.2% of events (people); batch_## = 20
+# values, 9.8% (batch jobs); NONE = 25.0% (no user recorded, mostly vendor-side
+# steps such as "Vendor creates invoice"). Only people are ranked by workload
+# and only a change between two people is a handover (evidence schema 2).
+# A string is a regex matched against the whole value; a list is exact values.
+# Empty values are always unassigned. A value matched by two types fails loudly.
+resource_types:
+  human: '^user_\d+$'
+  batch: '^batch_\d+$'
+  unassigned: ['NONE']
+  default_type: human
 
 # --- variant filter (mining/filtering.py) ----------------------------------
 # Off for BPI 2019, so the evidence stays comparable with earlier runs; the

@@ -13,6 +13,8 @@ events; non-monotonic timestamps within a case in the log's row order (i.e.
 the canonical sort guarantee is broken); timestamp ties within a case (these
 make directly-follows order ambiguous, so they bound the trustworthiness of
 every waiting-time number); activity cardinality; overall log size.
+Plus the resource-type breakdown (human / batch / unassigned, see
+``resource_types``), recomputed after cleaning so it describes the mined log.
 
 Each issue carries severity (info/warn/error), a count, a share of rows, and
 example rows so an analyst can look at the actual data behind the warning.
@@ -25,6 +27,11 @@ from typing import Any, Literal
 import pandas as pd
 from pydantic import BaseModel
 
+from processpilot.ingest.resource_types import (
+    ResourceTypeBreakdown,
+    ResourceTypeSettings,
+    resource_type_breakdown,
+)
 from processpilot.schema import TIMESTAMP_RAW
 
 Severity = Literal["info", "warn", "error"]
@@ -69,6 +76,8 @@ class DataQualityReport(BaseModel):
     case_count: int = 0
     issues: list[DataQualityIssue] = []
     cleaning_log: list[CleaningAction] = []
+    # None when the log has no resource column.
+    resource_types: ResourceTypeBreakdown | None = None
 
     def to_frame(self) -> pd.DataFrame:
         """One row per issue, for display in a notebook."""
@@ -98,6 +107,7 @@ def validate(
     plausible_timestamp_max: pd.Timestamp | str | None = None,
     max_distinct_activities_warn: int = 200,
     min_events_per_case_warn: int = 2,
+    resource_types: ResourceTypeSettings | None = None,
 ) -> DataQualityReport:
     """Build a ``DataQualityReport`` for a canonical event log. Fixes nothing.
 
@@ -320,11 +330,33 @@ def validate(
         )
     )
 
+    # --- resource types ---------------------------------------------------
+    breakdown = resource_type_breakdown(df, resource_types or ResourceTypeSettings())
+    if breakdown is not None and breakdown.configured and breakdown.defaulted_event_count:
+        # A value no rule names is a likely gap in the preset, so it is shown,
+        # though the default type is still applied.
+        defaulted = breakdown.defaulted_event_count
+        issues.insert(
+            len(issues) - 1,
+            DataQualityIssue(
+                code="resource_type_defaulted",
+                severity="info",
+                message=(
+                    f"{defaulted} event(s) have a resource value that no resource-type rule "
+                    f"matches (e.g. {', '.join(breakdown.defaulted_values)}); they are treated "
+                    f"as {breakdown.settings.default_type}."
+                ),
+                count=defaulted,
+                share=float(defaulted / max(n_rows, 1)),
+            ),
+        )
+
     return DataQualityReport(
         issue_count=len(issues),
         event_count=n_rows,
         case_count=case_count,
         issues=issues,
+        resource_types=breakdown,
     )
 
 
@@ -425,7 +457,12 @@ def apply_cleaning(
             )
             out = out.loc[~dup_mask].reset_index(drop=True)
 
-    new_report = report.model_copy(update={"cleaning_log": cleaning_log, "event_count": len(out)})
+    update: dict[str, Any] = {"cleaning_log": cleaning_log, "event_count": len(out)}
+    if report.resource_types is not None:
+        # Recomputed, not carried over: a run's data_quality.json must give the
+        # shares of the log that was actually mined.
+        update["resource_types"] = resource_type_breakdown(out, report.resource_types.settings)
+    new_report = report.model_copy(update=update)
     if "case_id" in out.columns:
         new_report.case_count = int(out["case_id"].nunique())
     return out, new_report

@@ -48,6 +48,7 @@ def test_evidence_ids_follow_the_scheme(store: EvidenceStore) -> None:
         "VA-04-all",
         "RW-01-all",
         "HO-00-all",
+        "RT-01-all",
         "RS-01-all",
         "RS-02-all",
         "RS-03-all",

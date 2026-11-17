@@ -17,7 +17,7 @@ import {
 } from "../api";
 import { fmtInt, fmtShare, fmtStamp } from "../format";
 import { useJob, writeScope } from "../hooks";
-import { ApiProblem, Coupon, JobLine, Kpis, Notice, Seg } from "../ui";
+import { ApiProblem, Coupon, JobLine, Kpis, Notice, ResourceTypesTable, Seg } from "../ui";
 
 const ROLES_REQUIRED = ["case_id", "activity", "timestamp"] as const;
 const ROLES_OPTIONAL = ["resource", "segment_by"] as const;
@@ -614,6 +614,7 @@ export function QualityReportView({ report }: { report: QualityReport }) {
           </div>
         </details>
       )}
+      {report.resource_types && <ResourceTypesTable breakdown={report.resource_types} />}
       <p className="small muted">The report only reports. Nothing has been changed in the data.</p>
     </>
   );

@@ -328,3 +328,35 @@ Show me a screenshot of each panel populated with the dry-run campaign. Web test
   `test_agent_graph.py`, manifest hardware in `test_evidence.py`); 7 web passed; ruff clean.
 - Open: thinking_level is not pinned (provider default); decide before Phase 4c freezes the
   manifest. langchain-google-genai retries 429s itself (default 6): fix in Phase 5.
+
+## Phase 2 done (2026-11-17)
+
+- Commit `ffec2f7` first: Phase 1 follow-ups (Gemini `thinking_level: medium`, `model_kwargs`
+  in `inputs.json`).
+- `ingest/resource_types.py`: preset `resource_types` block (regex string or exact-value list
+  per type human/batch/unassigned, `default_type`); empty values always unassigned; a value
+  claimed by two types raises. `configs/bpi2019.yaml` has the BPI rules; `generic.yaml` has
+  none (all recorded resources human, labelled "assumed" in the evidence).
+- Data-quality report: `resource_types` breakdown (events, cases, distinct values, examples,
+  basis per type), recomputed after cleaning; info issue `resource_type_defaulted` when a
+  configured preset leaves values unmatched. Shown on the Data page and in the run's
+  quality disclosure (Evidence page).
+- Evidence schema 2 (`mining/evidence.py` `EVIDENCE_SCHEMA_VERSION`, history in the module
+  docstring): RS-* people only (+ `human_event_share`); HO-00 / HO-nn between two different
+  people (shares over all transitions of the edge, ST share beside); new RT-01/02/03 (by
+  type) and ST-nn (system/vendor transitions, ranked by median wait x case share, with
+  kinds). New preset caps `top_n_system_transitions: 10`, `top_n_resource_type_activities: 5`.
+  `evidence_schema_version` in every `evidence.json` (run and segment) and `manifest.json`;
+  files without it read as 1. API run detail returns it; the Evidence page shows it in the
+  crumb and warns on schema-1 runs. Prompt text and heuristic catalogue unchanged
+  (`p4-v1`): heuristic signals still name existing metric fields.
+- Full BPI log (validate only, 15 s): human 1,040,646 (65.21%), batch 156,187 (9.79%),
+  unassigned 399,090 (25.01%); 607 / 20 / 1 distinct values; 0 defaulted.
+- Sample before/after: before = HEAD `ffec2f7` mined to scratch; after = run
+  `20261117T161258Z` (`20261117T160945Z` = same metrics, pre-wording-fix text; both dev).
+  171 non-resource items identical; 275 -> 315 items. Digest growth per segment: +17-33%
+  (+2.3k-5.8k chars, ~+0.7k-1.8k tokens per call at 3.2 chars/token, estimate).
+- Tests: 542 Python (523 + 19 in `test_resource_types.py`), 9 web (+2); ruff clean; bundle
+  rebuilt.
+- Open: none blocking. The answer key (Phase 4) uses BN/CF only, so it is unaffected; the
+  Phase 7 cost proxy should reuse `classify_resources`.

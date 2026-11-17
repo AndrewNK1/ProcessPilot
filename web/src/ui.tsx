@@ -2,8 +2,9 @@
 
 import type { ReactNode } from "react";
 import { AlertTriangle, CircleAlert, Info, ServerOff } from "lucide-react";
-import { ApiError, type AgentStatus, type EvidenceItem, type Job } from "./api";
-import { shortId } from "./format";
+import { ApiError, type AgentStatus, type EvidenceItem, type Job, type ResourceTypeBreakdown } from "./api";
+import { fmtInt, shortId } from "./format";
+import { resourceTypeRows } from "./resourceTypes";
 
 export function Coupon({
   no,
@@ -81,6 +82,52 @@ export function Kpis({ cells }: { cells: KpiCell[] }) {
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Human / batch / unassigned share of the log, as in the data-quality report.
+export function ResourceTypesTable({ breakdown }: { breakdown: ResourceTypeBreakdown }) {
+  const rows = resourceTypeRows(breakdown);
+  return (
+    <div className="section" style={{ gap: 6 }}>
+      <h3>Resource types</h3>
+      <p className="small muted" style={{ maxWidth: "80ch" }}>
+        Only people are ranked by workload, and only a change between two people counts as a handover. {" "}
+        {breakdown.configured ? `Rules: ${breakdown.rule_text}.` : `No rules configured: ${breakdown.rule_text}.`}
+        {breakdown.defaulted_event_count > 0 &&
+          ` ${fmtInt(breakdown.defaulted_event_count)} events matched no rule (e.g. ${breakdown.defaulted_values.join(", ")}).`}
+      </p>
+      <div className="table-wrap">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th className="r">Events</th>
+              <th className="r">Share of events</th>
+              <th className="r">Cases</th>
+              <th className="r">Distinct values</th>
+              <th className="wide">Most frequent values</th>
+              <th>Decided by</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.type}>
+                <td>{r.label}</td>
+                <td className="r">{r.events}</td>
+                <td className="r">{r.eventShare}</td>
+                <td className="r">
+                  {r.cases} <span className="small muted">({r.caseShare})</span>
+                </td>
+                <td className="r">{r.distinct}</td>
+                <td className="num small">{r.examples}</td>
+                <td className="small muted">{r.basis}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

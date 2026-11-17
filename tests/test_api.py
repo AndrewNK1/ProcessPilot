@@ -128,6 +128,11 @@ def test_bpi_sample_from_preset_to_approved_redesign(
         "consignment",
     }
     assert run["data_quality"]["cleaning_log"] == []  # the sample has no junk dates
+    assert run["evidence_schema_version"] == 2
+    # Resource types (configs/bpi2019.yaml rules) on the 6,502 sample events.
+    types = {t["type"]: t["event_count"] for t in run["data_quality"]["resource_types"]["types"]}
+    assert types == {"human": 3089, "batch": 913, "unassigned": 2500}
+    assert quality["resource_types"]["configured"]
 
     slug = "2-way-match"
     bottlenecks = client.get(f"/runs/{run_id}/segments/{slug}/evidence?type=bottleneck").json()
@@ -272,6 +277,8 @@ def test_run_found_on_disk_needs_its_preset_before_the_agent(
     with TestClient(create_app(_workspace(tmp_path))) as client:
         listed = client.get("/runs").json()
         assert [(r["run_id"], r["origin"], r["preset"]) for r in listed] == [(run_id, "disk", None)]
+        # The fixture manifest has no evidence_schema_version: read as schema 1.
+        assert client.get(f"/runs/{run_id}").json()["evidence_schema_version"] == 1
         start = f"/runs/{run_id}/segments/{SLUG}/agent-runs"
         assert client.post(start, json={"model_id": MODEL_ID}).status_code == 409
         assert client.put(f"/runs/{run_id}/preset", json={"preset": "nope"}).status_code == 422

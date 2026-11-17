@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from processpilot.ingest.resource_types import ResourceTypeSettings
+
 ConformanceRuleType = Literal["activity_a_before_activity_b", "activity_must_occur"]
 
 
@@ -32,6 +34,10 @@ class AnalysisSettings(BaseModel):
     top_n_rework: int = Field(gt=0)
     top_n_resources: int = Field(gt=0)
     top_n_handovers: int = Field(gt=0)
+    # Evidence schema 2: ST-* items (transitions with a batch job or no user
+    # recorded) and the top activities listed per resource type (RT-*).
+    top_n_system_transitions: int = Field(gt=0)
+    top_n_resource_type_activities: int = Field(gt=0)
     top_n_activity_waits: int = Field(gt=0)
     top_n_model_deviations: int = Field(gt=0)
     max_example_cases: int = Field(default=5, gt=0)
@@ -139,6 +145,7 @@ class MiningSettings(BaseModel):
     conformance_rules: list[ConformanceRule] = Field(default_factory=list)
     variant_filter: VariantFilterSettings = Field(default_factory=VariantFilterSettings)
     reference_models: ReferenceModelSettings = Field(default_factory=ReferenceModelSettings)
+    resource_types: ResourceTypeSettings = Field(default_factory=ResourceTypeSettings)
 
     @classmethod
     def from_preset(cls, preset: dict[str, Any]) -> MiningSettings:
@@ -151,4 +158,5 @@ class MiningSettings(BaseModel):
             conformance_rules=preset.get("conformance_rules") or [],
             variant_filter=preset.get("variant_filter") or {},
             reference_models=preset.get("reference_models") or {},
+            resource_types=preset.get("resource_types") or {},
         )

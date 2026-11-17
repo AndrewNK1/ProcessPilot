@@ -47,7 +47,7 @@ from processpilot.config import (
     resolve_source_path,
 )
 from processpilot.ingest.mapping import ColumnMapping, suggest_mapping
-from processpilot.mining.evidence import EvidenceStore
+from processpilot.mining.evidence import UNVERSIONED_SCHEMA, EvidenceStore
 from processpilot.mining.paths import path_waits
 from processpilot.mining.run import CASE_WAITS_FILE, new_run_id
 from processpilot.pipeline import (
@@ -504,6 +504,11 @@ class Workspace:
         return {
             **record,
             "manifest": manifest,
+            # Runs mined before the field existed follow schema 1
+            # (mining/evidence.py history).
+            "evidence_schema_version": None
+            if manifest is None
+            else manifest.get("evidence_schema_version", UNVERSIONED_SCHEMA),
             "segments": segments,
             "data_quality": _read_json(run_dir / DATA_QUALITY_FILE),
         }

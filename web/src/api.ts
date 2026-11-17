@@ -65,12 +65,35 @@ export interface QualityIssue {
   example_rows: Record<string, unknown>[];
 }
 
+export interface ResourceTypeCount {
+  type: "human" | "batch" | "unassigned";
+  event_count: number;
+  event_share: number;
+  case_count: number;
+  case_share: number;
+  distinct_resources: number;
+  example_values: string[];
+  events_by_basis: Record<string, number>;
+}
+
+export interface ResourceTypeBreakdown {
+  configured: boolean;
+  rule_text: string;
+  event_count: number;
+  case_count: number;
+  types: ResourceTypeCount[];
+  defaulted_event_count: number;
+  defaulted_values: string[];
+}
+
 export interface QualityReport {
   issue_count: number;
   event_count: number;
   case_count: number;
   issues: QualityIssue[];
   cleaning_log: Record<string, unknown>[];
+  // Absent in reports written before evidence schema 2; null without a resource column.
+  resource_types?: ResourceTypeBreakdown | null;
 }
 
 export interface CleaningAdvice {
@@ -136,6 +159,8 @@ export interface Segment {
 export interface Run extends RunSummary {
   segments: Segment[];
   data_quality: QualityReport | null;
+  // From manifest.json; 1 for runs mined before the field existed, null if unmined.
+  evidence_schema_version: number | null;
 }
 
 export interface SegmentModel {

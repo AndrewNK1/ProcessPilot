@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from processpilot.config import load_config_yaml
 from processpilot.ingest.mapping import ColumnMapping, apply_mapping, split_by_segment
+from processpilot.ingest.resource_types import ResourceTypeSettings
 from processpilot.ingest.validate import DataQualityReport, apply_cleaning, validate
 from processpilot.mining.evidence import EvidenceStore
 from processpilot.mining.reference import load_reference_model
@@ -59,8 +60,12 @@ def load_canonical(source: DataSource, mapping: ColumnMapping) -> pd.DataFrame:
 
 
 def validate_log(canonical: pd.DataFrame, preset: dict[str, Any]) -> DataQualityReport:
-    """``validate`` with the preset's thresholds. Fixes nothing."""
-    return validate(canonical, **_validation_kwargs(preset))
+    """``validate`` with the preset's thresholds and resource types. Fixes nothing."""
+    return validate(
+        canonical,
+        **_validation_kwargs(preset),
+        resource_types=ResourceTypeSettings.from_preset(preset),
+    )
 
 
 def clean_log(

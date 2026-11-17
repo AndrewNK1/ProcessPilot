@@ -34,12 +34,18 @@ analysis:
   top_n_rework: 10
   top_n_resources: 15
   top_n_handovers: 10
+  top_n_system_transitions: 10
+  top_n_resource_type_activities: 5
   top_n_activity_waits: 10
   top_n_model_deviations: 10
   max_example_cases: 5
 
 variant_filter:
   mode: none
+
+# No resource_types block: every recorded resource counts as human, empty
+# values as unassigned, and the evidence says the types were assumed. Add a
+# block (see bpi2019.yaml) when the log has system accounts or placeholders.
 
 reference_models:
   default: null
