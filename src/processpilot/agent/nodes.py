@@ -248,6 +248,10 @@ def load_evidence(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             "model_id": ctx.llm.model_id,
             "model_fingerprint": model_fingerprint(ctx.llm.model_id),
             "model_settings": ctx.settings.model.model_dump(),
+            # The provider block actually used for this run (e.g. Gemini's
+            # pinned thinking_level), so a reader need not pick it out of
+            # every provider's settings above.
+            "model_kwargs": ctx.settings.model.logged_kwargs_for(ctx.llm.model_id),
             "model_notes": ctx.settings.model.notes_for(ctx.llm.model_id),
             "max_retries": ctx.settings.max_retries,
             "max_revision_loops": ctx.settings.max_revision_loops,

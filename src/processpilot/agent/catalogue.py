@@ -121,6 +121,15 @@ class ModelSettings(BaseModel):
         """The logged caveats for the provider of ``model_id`` (may be empty)."""
         return self.notes.get(model_id.split(":", 1)[0], [])
 
+    def logged_kwargs_for(self, model_id: str) -> dict[str, Any] | None:
+        """The kwargs sent for ``model_id``'s provider, or ``None`` if it has none.
+
+        For the run log only: unlike ``kwargs_for`` it does not fail on a
+        provider without a block (scripted test/dry-run models never create a
+        client), so logging cannot break a run the model itself would allow.
+        """
+        return self.init_kwargs.get(model_id.split(":", 1)[0])
+
     def kwargs_for(self, model_id: str) -> dict[str, Any]:
         """The kwargs for ``"<provider>:<model>"``; unknown provider fails loudly."""
         provider = model_id.split(":", 1)[0]

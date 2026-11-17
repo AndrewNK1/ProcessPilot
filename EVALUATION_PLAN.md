@@ -264,6 +264,17 @@ Show me a screenshot of each panel populated with the dry-run campaign. Web test
   labelled, never deleted; Phase 7 XLSX via openpyxl.
 - Run explorer added to Phase 8 (item 9).
 
+# Decisions after Phase 1 (Andrew, 2026-11-17)
+
+- Gemini `thinking_level: medium` pinned in `configs/agent.yaml` (Google's current
+  default), logged in `inputs.json` (`model_kwargs`, `model_notes`), tested on the
+  request the client builds. **Phase 4c: the campaign manifest must include it**
+  (it is part of "all agent settings"; check it explicitly).
+- Hidden SDK retries (langchain-google-genai default 6): fixed in Phase 5 as planned;
+  no agent runs from the app until then.
+- BPI design comments in src, the Anthropic-only live test and the local CLAUDE.md
+  stay as they are.
+
 # Phase log
 
 ## Phase 0 done (2026-11-13, read-only audit)

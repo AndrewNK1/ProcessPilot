@@ -60,9 +60,15 @@ model:
     # checked 2026-11-13). Left unset, langchain-google-genai 4.4.2 sends no
     # temperature for Gemini 3+ models. The seed is still sent; whether it has
     # any effect is UNVERIFIED (see `notes`), so prompts and raw outputs are logged.
+    # thinking_level pinned to "medium" (user decision 2026-11-17): it is Google's
+    # documented default for gemini-3.6-flash today, but pinning it means a later
+    # change of the default cannot silently change the evaluation. In
+    # langchain-google-genai 4.4.2 `thinking_level` is the alias of the
+    # `reasoning_effort` field and is sent as generationConfig.thinkingConfig.
     google_genai:
       seed: 42
       max_output_tokens: 16000
+      thinking_level: medium
   # Caveats copied into every run's inputs.json and summary.json for the
   # provider in use, so a reader of the logs sees what a setting does not do.
   notes:
@@ -74,8 +80,9 @@ model:
         temperature, top_p and top_k are not sent: Google documents them as
         deprecated and ignored for Gemini 3.6 Flash and later.
       - >-
-        thinking_level is not set, so the provider default applies (Google
-        documents "medium" for gemini-3.6-flash; not confirmed in the response).
+        thinking_level=medium is sent explicitly (Google's documented default for
+        gemini-3.6-flash, pinned so a default change cannot alter runs); the
+        response does not echo the level, so its application is not confirmed.
   # `json_schema` = the provider's native structured-output mode. Forced tool
   # calling ("function_calling") is rejected by Claude Opus 5.5 / Sonnet 5.5.
   structured_output_method: json_schema

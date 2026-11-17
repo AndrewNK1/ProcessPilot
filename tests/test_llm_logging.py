@@ -96,6 +96,30 @@ def test_gemini_client_sends_no_temperature() -> None:
     assert chat.temperature is None and chat.top_p is None and chat.top_k is None
 
 
+def test_gemini_thinking_level_is_pinned_and_sent_in_the_request() -> None:
+    # User decision 2026-11-17: pin thinking_level=medium. Checked on the request
+    # the client would send (built offline, never sent), not only the config, so a
+    # library change that dropped the alias would fail here. Without the setting
+    # the request carries no thinking config at all (provider default).
+    from google.genai.types import ThinkingLevel
+    from langchain_core.messages import HumanMessage
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    kwargs = load_agent_settings().model.kwargs_for(GEMINI)
+    assert kwargs["thinking_level"] == "medium"
+
+    def request_config(**kw: Any) -> Any:
+        chat = ChatGoogleGenerativeAI(
+            model=bare_model_name(GEMINI), google_api_key="not-a-real-key", **kw
+        )
+        return chat._prepare_request([HumanMessage(content="q")])["config"]
+
+    sent = request_config(**kwargs)
+    assert sent.thinking_config.thinking_level == ThinkingLevel.MEDIUM
+    assert sent.seed == 42 and sent.max_output_tokens == 16000
+    assert request_config().thinking_config is None
+
+
 def test_gemini_list_price_gives_a_cost() -> None:
     price = load_agent_settings().pricing_usd_per_mtok[bare_model_name(GEMINI)]
     usage = TokenUsage(input_tokens=1_000_000, output_tokens=1_000_000, cache_read_tokens=0)

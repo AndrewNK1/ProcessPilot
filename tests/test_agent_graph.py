@@ -114,6 +114,30 @@ def test_run_logs_record_models_hardware_and_cost_basis(run_dir: Path) -> None:
     assert {c["cost_basis"] for c in calls} == {review["cost_basis"]}
 
 
+def test_inputs_json_records_the_provider_kwargs_sent(run_dir: Path) -> None:
+    # A Gemini-labelled scripted model with the real configs/agent.yaml model
+    # block: inputs.json must name the pinned thinking_level of this run.
+    from processpilot.agent.catalogue import load_agent_settings
+
+    llm = ScriptedLLM([valid_diagnosis(), valid_redesign()])
+    llm.model_id = "google_genai:gemini-3.6-flash"
+    settings = agent_settings()
+    settings.model = load_agent_settings().model
+    with AgentRunner(run_dir, preset(), llm=llm, settings=settings) as runner:
+        agent_run_id, _ = runner.start(SEGMENT)
+    inputs = json.loads((_log(run_dir, agent_run_id).directory / "inputs.json").read_text("utf-8"))
+    assert inputs["model_kwargs"]["thinking_level"] == "medium"
+    assert any("thinking_level=medium" in n for n in inputs["model_notes"])
+
+
+def test_inputs_json_model_kwargs_null_for_provider_without_block(run_dir: Path) -> None:
+    runner, _ = _runner(run_dir, [valid_diagnosis(), valid_redesign()])
+    with runner:
+        agent_run_id, _ = runner.start(SEGMENT)
+    inputs = json.loads((_log(run_dir, agent_run_id).directory / "inputs.json").read_text("utf-8"))
+    assert inputs["model_kwargs"] is None  # fixture settings define no provider blocks
+
+
 def test_prompts_contain_evidence_but_no_metrics_dump(run_dir: Path) -> None:
     runner, llm = _runner(run_dir, [valid_diagnosis(), valid_redesign()])
     with runner:
