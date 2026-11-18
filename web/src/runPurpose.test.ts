@@ -23,5 +23,6 @@ describe("run purpose", () => {
   it("counts what the toggle hides", () => {
     expect(hiddenEvaluationCount(runs, false)).toBe(1);
     expect(hiddenEvaluationCount(runs, true)).toBe(0);
+    expect(hiddenEvaluationCount(runs, false, "r3")).toBe(0); // on screen, so not hidden
   });
 });

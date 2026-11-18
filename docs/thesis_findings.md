@@ -525,6 +525,41 @@ two models within its size gate (21 and 30 Petri-net transitions); the two large
 ones (117 and 85) are skipped, so they rest on construction plus the structural
 check, as before.
 
+## 5e. Evaluation set-up (Phase 4, 2026-11-18)
+
+**Frozen mining run.** All evaluation runs use one mining run, `20261118T011500Z`
+(preset `bpi2019`, mined at commit `24303fd` with the preset's suggested cleaning:
+1,593,429 events, 251,654 cases, evidence schema 3, 344 evidence items, 82 s). Its 28
+files that the agent and the scorers read are hashed in the campaign manifest, together
+with the source XES (728,558,522 bytes, SHA-256 recorded) and the preset's content hash.
+The app refuses agent runs on it, so only the campaign runner writes to it.
+
+**Draft and seal.** The campaign (`eval-2026-11-v1`) was drafted before any LLM run,
+which fixes the answer key. It is sealed only after the runner and the baseline are
+committed. Sealing re-checks every hash and records the code commit, prompt version,
+model, settings, library versions and hardware, and the runner refuses to continue if
+any of them changes.
+
+**Answer key (RQ1 reference list).** By the fixed rule (top-3 bottlenecks by impact,
+plus rules violated in more than 1% of completed cases), the key holds **only
+bottlenecks in all four segments**:
+
+| Segment | BN-01 | BN-02 | BN-03 |
+|---|---|---|---|
+| 2-way match | Change Approval for PO -> Vendor creates invoice (29.3 d, 19.9%) | Vendor creates invoice -> Create PO Item (11.5 d, 40.8%) | Clear Invoice -> Change Approval for PO (35.4 d, 12.1%) |
+| 3-way, invoice after GR | Record Invoice Receipt -> Clear Invoice (21.1 d, 51.7%) | Record Goods Receipt -> Record Invoice Receipt (19.0 d, 35.5%) | Vendor creates invoice -> Record Invoice Receipt (16.4 d, 32.7%) |
+| 3-way, invoice before GR | Record Invoice Receipt -> Clear Invoice (37.2 d, 56.4%) | Record Goods Receipt -> Record Invoice Receipt (12.2 d, 48.0%) | Remove Payment Block -> Clear Invoice (27.5 d, 21.4%) |
+| Consignment | Create PO Item -> Record Goods Receipt (19.9 d, 82.3%) | Receive Order Confirmation -> Record Goods Receipt (16.5 d, 4.4%) | Create PO Item -> Change Quantity (7.9 d, 5.9%) |
+
+(median wait, share of cases.) Completed-case violation rates of every rule (none above
+1%): 2-way R-02 0/168, R-03 0/166; after GR R-01 0/9,241, R-02 4/9,241 (0.04%), R-03
+2/9,242 (0.02%), R-04 1/9,242 (0.01%); before GR R-02 6/171,498 (0.00%), R-03
+375/171,845 (0.22%), R-04 516/171,845 (0.30%); Consignment has no applicable rule. On
+all cases, R-03 and R-04 are much higher (e.g. R-03 after GR 26.7%), almost entirely open
+or deleted items. A diagnosis that reports these as compliance problems is therefore not
+supported by the completed-case evidence; Phase 7 measures this ("unsupported compliance
+claims", user decision 2026-11-18).
+
 ## 6. Limitations to state
 
 - Single-timestamp log: waiting and processing time cannot be separated.
@@ -645,3 +680,7 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | 2026-11-18 | Unverifiable-controls flag: approval activities = "Approv" pattern + Release PO / Release PR; an operation touches an activity it names in any role (incl. `after` anchors) or a new name that matches; flag never blocks |
 | 2026-11-18 | Prompt `p5-v1`: digest heading names RS / HO / RT / ST |
 | 2026-11-18 | Must-occur rules (R-03, R-04): completed cases ending in Delete Purchase Order Item excluded from the completed share; evidence schema 3 |
+| 2026-11-18 | Answer-key rule kept as fixed; if no rule passes 1%, the key holds bottlenecks only, stated explicitly with every rule's completed-case rate |
+| 2026-11-18 | Campaign drafted before the LLM runs, sealed after Phases 5-6; sealing re-checks the frozen files and the answer key |
+| 2026-11-18 | The app refuses agent runs on the evaluation mining run |
+| 2026-11-18 | Phase 7 measures compliance problems claimed by a diagnosis but not supported by the evidence |

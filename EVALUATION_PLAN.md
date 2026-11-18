@@ -196,6 +196,10 @@ All in `scripts/eval/`, no LLM calls, rerunnable at any time (also on a partial 
 - **Second scorer:** export a random third of the sample, stratified by origin (fixed seed), as a separate sheet for my classmate. After both are imported: weighted Cohen's kappa per criterion (quadratic or linear weights; state which).
 - After import: mean scores per criterion and origin, with the success criterion (fixed): **ProcessPilot above the baseline on C1 and C4; every planted flaw caught by code or by scoring.** Pass/fail.
 
+**Unsupported compliance claims (amended 2026-11-18, Andrew):** a measure for compliance
+problems the diagnosis claims that the evidence does not support (definition in the Phase 7
+plan).
+
 **Efficiency (for Chapter 5):** per condition and segment: calls, validation vs transport retries, input/output tokens, latency per node, estimated cost.
 
 **`summarize.py`:** one `summary.json` + a readable `summary.md` with all success criteria, tables and figure paths, clearly labelled as generated from campaign `<id>`. No interpretation text; that is my job in the thesis.
@@ -274,6 +278,19 @@ Show me a screenshot of each panel populated with the dry-run campaign. Web test
   no agent runs from the app until then.
 - BPI design comments in src, the Anthropic-only live test and the local CLAUDE.md
   stay as they are.
+
+# Decisions after Phase 3 (Andrew, 2026-11-18)
+
+- Answer key rule unchanged (top-3 bottlenecks + every rule violated in more than 1% of
+  completed cases). If no rule passes 1%, the key holds only the bottlenecks; this is stated
+  explicitly in `answer_key.json` (`key_contents`) together with every rule's actual
+  completed-case rate (`conformance_rates`), so the thesis can report them.
+- **Phase 7 addition:** a measure for compliance problems the diagnosis claims that the
+  evidence does not support (define it in the Phase 7 plan).
+- Phase 4: campaign drafted now, sealed after Phases 5-6 are committed; sealing re-checks the
+  hashes of the frozen files and the answer key. The app refuses agent starts on the
+  evaluation mining run (409). The two Phase 2 sample runs are named `bpi2019_sample`; the
+  four October runs stay unnamed.
 
 # Phase log
 
@@ -401,3 +418,37 @@ Show me a screenshot of each panel populated with the dry-run campaign. Web test
 - Tests: 570 Python (542 + 28: `test_controls.py`, conformance exclusion, API per-segment
   defaults), 13 web (+4, `controls.test.ts`); ruff clean; bundle rebuilt. No LLM calls.
 - Notebook 03: one line changed (`default_constraints(SEGMENT)`, new signature).
+
+## Phase 4 done (2026-11-18)
+
+- **4a.** SQLite schema 2 by step migration (`api/db.py` `_MIGRATIONS`; a copy
+  `processpilot.sqlite.bak-v1` is written first; a newer schema is refused): `purpose`
+  (dev|evaluation) + `campaign_id` on runs and agent_runs, `launched_by` (app|batch) +
+  `condition` on agent_runs; tables `eval_campaigns`, `eval_runs`. Real index migrated: 17 runs,
+  10 agent runs, 3 decisions kept, all `dev`. Disk runs whose manifest names a preset are
+  registered with it (`mine_log(preset_name=...)` writes it); the two Phase 2 sample runs named
+  `bpi2019_sample`; the four October runs stay unnamed. Agent start on an evaluation run -> 409;
+  the Redesign page says why. UI: Dev/Evaluation tag in the shell scope, run pickers hide
+  evaluation runs unless "Show evaluation runs" is ticked (per-viewer, localStorage `pp-show-eval`;
+  a run the URL names stays visible).
+- **4b.** Frozen run **`20261118T011500Z`**: `scripts/eval/mine_frozen_run.py --preset bpi2019`,
+  mined at commit `24303fd` (clean tree enforced), preset `bpi2019`, suggested cleaning (out-of-range
+  timestamps dropped), 1,593,429 events / 251,654 cases, evidence schema 3, 344 items, 82 s.
+  `eval_mining.json` records preset hash, policy, commit. Top-3 bottlenecks identical to the
+  earlier full run `20261111T140530Z`.
+- **4c.** Draft campaign **`eval-2026-11-v1`** (`outputs/eval/eval-2026-11-v1/manifest.json`,
+  status draft, also in SQLite): frozen run, 28 frozen file hashes, source XES size + SHA-256,
+  preset hash, mining commit, cleaning policy, design (4 segments x 5 reps x processpilot +
+  baseline), answer key SHA-256 `3733312a...db28`. Seal with
+  `create_campaign.py --campaign eval-2026-11-v1 --seal` after Phases 5-6 are committed: it
+  re-checks every frozen hash, the source, the preset and the answer key, requires a clean tree,
+  requires `rate_limit` (Phase 5) and `baseline` (Phase 6) in `configs/eval.yaml` and Gemini's
+  pinned `thinking_level`, records the environment and creates tag `eval-v1`.
+  `evaluation.campaign.check_unchanged` is what the Phase 5 runner must call before every run.
+- **4d.** Answer key (read-only `answer_key.json` + `.csv`): all four segments = **bottlenecks
+  only**; no rule exceeds 1% of completed cases (highest: R-04 before GR 0.30%, R-03 before GR
+  0.22%). Every rule's rates in `conformance_rates`; lenient-match info per item
+  (`activities`, `related_evidence_ids`: AW of the target + HO/ST on the edge).
+- Tests: 590 Python (+20: `test_evaluation.py`, two in `test_api.py`), 16 web (+3); ruff clean;
+  bundle rebuilt. No LLM calls. `outputs/` is gitignored, so the key and manifest are not in git;
+  their SHA-256 values are recorded here and in SQLite.

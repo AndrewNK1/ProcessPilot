@@ -23,7 +23,7 @@ export function pickableRuns<T extends PurposeRun>(runs: T[], showEvaluation: bo
   return runs.filter((r) => showEvaluation || purposeOf(r) !== "evaluation" || r.run_id === currentRunId);
 }
 
-/** How many runs the toggle hides (for its label). */
-export function hiddenEvaluationCount(runs: PurposeRun[], showEvaluation: boolean): number {
-  return showEvaluation ? 0 : runs.filter((r) => purposeOf(r) === "evaluation").length;
+/** How many runs the toggle hides (for its label); the run on screen is never hidden. */
+export function hiddenEvaluationCount(runs: PurposeRun[], showEvaluation: boolean, currentRunId?: string): number {
+  return showEvaluation ? 0 : runs.filter((r) => purposeOf(r) === "evaluation" && r.run_id !== currentRunId).length;
 }

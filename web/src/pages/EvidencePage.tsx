@@ -30,7 +30,7 @@ export function useRunScope(base: "evidence" | "redesign") {
   const mined = pickable.length ? pickable : allMined;
   const evalToggle = {
     shown: showEval === "1",
-    hidden: hiddenEvaluationCount(allMined, showEval === "1"),
+    hidden: hiddenEvaluationCount(allMined, showEval === "1", runId),
     set: (on: boolean) => setShowEval(on ? "1" : "0"),
   };
   const remembered = readScope();
