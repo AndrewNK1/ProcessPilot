@@ -42,6 +42,7 @@ from processpilot.agent.catalogue import (
     load_domain_knowledge,
     load_heuristics,
 )
+from processpilot.agent.controls import ControlRules
 from processpilot.agent.llm import LangChainLLM, StructuredLLM
 from processpilot.agent.nodes import AgentContext
 from processpilot.agent.runlog import RunLogger
@@ -182,6 +183,10 @@ class AgentRunner:
         self.catalogue = catalogue or load_heuristics()
         self.domain = domain or load_domain_knowledge(preset.get("domain_knowledge"))
         self.store = EvidenceStore.from_json(self.run_dir / "evidence.json")
+        # Parsed and checked once, before any model is created: a misspelt
+        # control key or segment name must fail here, not switch a control off.
+        self.controls = ControlRules.from_preset(preset)
+        self.controls.check_segments(self.store.segments())
         self.llm = llm or create_llm(model_id_from_env(self.settings), self.settings)
         self._saver, self._conn = open_checkpointer(self.run_dir / CHECKPOINT_FILE)
 
@@ -202,13 +207,9 @@ class AgentRunner:
         """Release the checkpoint database."""
         self._conn.close()
 
-    def default_constraints(self) -> Constraints:
-        """Constraints from the preset's ``redesign`` block."""
-        block = self.preset.get("redesign") or {}
-        return Constraints(
-            text=block.get("constraints_text") or [],
-            protected_activities=block.get("protected_activities") or [],
-        )
+    def default_constraints(self, segment: str) -> Constraints:
+        """Constraints from the preset's ``redesign`` block for ``segment``."""
+        return self.controls.defaults_for(segment)
 
     def _context(self, segment: str, agent_run_id: str) -> AgentContext:
         seg_dir = self.run_dir / segment_slug(segment)
@@ -227,6 +228,7 @@ class AgentRunner:
             segment_dir=seg_dir,
             as_is_tree=tree,
             observed_activities=observed,
+            controls=self.controls,
         )
 
     def _graph(self, segment: str, agent_run_id: str) -> CompiledStateGraph:
@@ -264,13 +266,17 @@ class AgentRunner:
         agent_run_id: str | None = None,
         on_node: NodeCallback | None = None,
     ) -> tuple[str, AgentState]:
-        """Run until the review interrupt (or failure). Returns (agent_run_id, state)."""
+        """Run until the review interrupt (or failure). Returns (agent_run_id, state).
+
+        ``constraints`` may add protected activities; the preset's protected
+        activities for ``segment`` are always kept (a floor, see ``controls``).
+        """
         agent_run_id = agent_run_id or self.new_agent_run_id(segment)
         initial = AgentState(
             run_id=self.run_id,
             agent_run_id=agent_run_id,
             segment=segment,
-            constraints=constraints or self.default_constraints(),
+            constraints=self.controls.with_floor(segment, constraints),
         )
         self._drive(segment, agent_run_id, initial, on_node)
         return agent_run_id, self.state(segment, agent_run_id)

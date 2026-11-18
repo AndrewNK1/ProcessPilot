@@ -70,7 +70,7 @@ def test_local_model_diagnosis_reliability() -> None:
                 run_id=runner.run_id,
                 agent_run_id=agent_run_id,
                 segment=SEGMENT,
-                constraints=runner.default_constraints(),
+                constraints=runner.default_constraints(SEGMENT),
             )
             state = state.model_copy(update=nodes.load_evidence(state, ctx))
             started = time.perf_counter()

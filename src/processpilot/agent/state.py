@@ -171,13 +171,22 @@ class EditResult(BaseModel):
 
 
 class ProposalValidation(BaseModel):
-    """Outcome of ``validate`` for one proposal. ``estimate`` is an ESTIMATE."""
+    """Outcome of ``validate`` for one proposal. ``estimate`` is an ESTIMATE.
+
+    ``unverifiable_controls`` are warnings, never a failure: the proposal
+    touches a control (e.g. an approval) that this log cannot show, so its
+    effect on that control is unchecked. ``unverifiable_activities`` are the
+    activities that triggered them. Both default to empty so checkpoints
+    written before evaluation Phase 3 still load.
+    """
 
     proposal_index: int
     status: Literal["validated", "skipped", "failed"]
     soundness: SoundnessResult | None = None
     estimate: ImpactEstimate | None = None
     message: str | None = None
+    unverifiable_controls: list[str] = Field(default_factory=list)
+    unverifiable_activities: list[str] = Field(default_factory=list)
 
 
 RunStatus = Literal["running", "awaiting_review", "approved", "rejected", "failed"]

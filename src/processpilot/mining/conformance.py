@@ -18,6 +18,9 @@ Semantics, chosen to be conservative:
   timestamps are counted separately as ``tied_cases``, never as violations,
   because their order is unknown.
 - must-occur: evaluated on every case; violated when the activity is absent.
+  A rule's ``exclude_completed_ending_in`` removes completed cases that end in
+  one of those activities (a cancellation) from its completed-cases figures
+  only; ``completed_excluded_cases`` says how many were removed.
 """
 
 from __future__ import annotations
@@ -43,6 +46,8 @@ class ConformanceResult(BaseModel):
     completed_evaluated_cases: int | None
     completed_violation_count: int | None
     completed_violation_share: float | None
+    completed_excluded_ending_in: list[str] = []
+    completed_excluded_cases: int | None = None
     tied_cases: int | None
     activities_missing_from_segment: list[str]
     example_case_ids: list[str]
@@ -74,10 +79,27 @@ def check_rules(
             evaluated, violating = _must_occur(df, first_seen, rule.params["activity"])
             tied = None
             named = [rule.params["activity"]]
-        results.append(
-            _result(rule, evaluated, violating, tied, completed, present, named, max_example_cases)
+        rule_completed, excluded = _completed_for(rule, completed, ends)
+        result = _result(
+            rule, evaluated, violating, tied, rule_completed, present, named, max_example_cases
         )
+        if rule.exclude_completed_ending_in:
+            result.completed_excluded_ending_in = list(rule.exclude_completed_ending_in)
+            result.completed_excluded_cases = (
+                None if excluded is None else len(evaluated & excluded)
+            )
+        results.append(result)
     return results
+
+
+def _completed_for(
+    rule: ConformanceRule, completed: set[str] | None, ends: pd.Series
+) -> tuple[set[str] | None, set[str] | None]:
+    """The rule's completed cases, and the completed cases its exclusion removed."""
+    if completed is None or not rule.exclude_completed_ending_in:
+        return completed, None
+    excluded = completed & set(ends.index[ends.isin(rule.exclude_completed_ending_in)])
+    return completed - excluded, excluded
 
 
 def _cases_with(first_seen: pd.Series, activity: str) -> pd.Series:

@@ -295,12 +295,12 @@ def test_schema_version_in_evidence_and_manifest(typed_log: pd.DataFrame, tmp_pa
     settings = _settings()
     result = mine_segment(typed_log, "seg", settings, discover_model=False)
     store = write_run([result], tmp_path, settings)
-    assert store.evidence_schema_version == EVIDENCE_SCHEMA_VERSION == 2
+    assert store.evidence_schema_version == EVIDENCE_SCHEMA_VERSION == 3
     on_disk = json.loads((tmp_path / "evidence.json").read_text(encoding="utf-8"))
     seg_file = json.loads((tmp_path / "seg" / "evidence.json").read_text(encoding="utf-8"))
     manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
-    assert on_disk["evidence_schema_version"] == seg_file["evidence_schema_version"] == 2
-    assert manifest["evidence_schema_version"] == 2
+    assert on_disk["evidence_schema_version"] == seg_file["evidence_schema_version"] == 3
+    assert manifest["evidence_schema_version"] == 3
     assert manifest["settings"]["resource_types"]["batch"] == r"^b\d+$"
 
 

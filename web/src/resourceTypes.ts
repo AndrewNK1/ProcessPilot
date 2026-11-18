@@ -47,8 +47,11 @@ export function resourceTypeRows(b: ResourceTypeBreakdown): ResourceTypeRow[] {
 }
 
 // The schema history lives in mining/evidence.py; 1 = files written before
-// the field existed (every resource value counted as a person).
-export const CURRENT_EVIDENCE_SCHEMA = 2;
+// the field existed (every resource value counted as a person). The legacy
+// notice is about resource types, so it fires below the schema that
+// introduced them (2), not below the current one (3 only changed CF items).
+export const CURRENT_EVIDENCE_SCHEMA = 3;
+export const RESOURCE_TYPES_SCHEMA = 2;
 
 export function schemaLabel(version: number | null | undefined): string {
   if (version === null || version === undefined) return "evidence schema unknown";
@@ -56,5 +59,5 @@ export function schemaLabel(version: number | null | undefined): string {
 }
 
 export function schemaIsLegacy(version: number | null | undefined): boolean {
-  return version !== null && version !== undefined && version < CURRENT_EVIDENCE_SCHEMA;
+  return version !== null && version !== undefined && version < RESOURCE_TYPES_SCHEMA;
 }

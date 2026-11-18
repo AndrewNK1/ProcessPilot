@@ -222,6 +222,11 @@ conformance_rules:
     # 21,446 / 221,010 (3-way before GR). OPEN QUESTION for Phase 2: the log
     # is a time window, so part of these are cases still running at extraction,
     # not breakdowns -- Phase 2 must separate the two before reporting it.
+    # A deleted item legitimately has no invoice (domain fact D-14), so cases
+    # ending in Delete Purchase Order Item are left out of the completed-cases
+    # figures (evaluation Phase 3, user decision 2026-11-16).
+    exclude_completed_ending_in:
+      - "Delete Purchase Order Item"
 
   - id: R-04
     name: goods_receipt_required_for_three_way
@@ -236,17 +241,54 @@ conformance_rules:
       - "3-way match, invoice before GR"
     # checked: missing in 643 / 15,182 (after GR) and 14,536 / 221,010
     # (before GR); same open-case caveat as R-03.
+    # Same exclusion as R-03: a deleted item legitimately has no goods receipt.
+    exclude_completed_ending_in:
+      - "Delete Purchase Order Item"
 
 # --- agent inputs (Phase 3) -----------------------------------------------
 # Domain facts the agent may use to interpret evidence: configs/domain/<name>.yaml.
 domain_knowledge: p2p
 
 # --- redesign constraints -------------------------------------------------
-# Machine-readable subset of the analyst's constraints, enforced by
-# apply_edits (not merely suggested to the LLM).
+# Machine-readable control rules, enforced in code (agent/controls.py): the
+# validator rejects and apply_operation refuses any edit that removes, moves,
+# merges or parallelizes a protected activity. The preset's list is a floor:
+# the analyst may protect more activities for a run, never fewer.
 redesign:
+  # Protected in every segment.
   protected_activities:
     - "Clear Invoice"
+  # Added to the list above for the named segments (never replaces it).
+  # Record Goods Receipt is the goods-receipt leg of the three-way match, and
+  # in Consignment the receipt is the step that ends the case in this log
+  # (user decision 2026-11-16). 2-way match has no goods-receipt control.
+  protected_activities_per_segment:
+    "3-way match, invoice after GR":
+      - "Record Goods Receipt"
+    "3-way match, invoice before GR":
+      - "Record Goods Receipt"
+    "Consignment":
+      - "Record Goods Receipt"
+  # Free text for the prompt only. The old line "Goods receipt recording
+  # cannot be removed for physical-goods categories." was removed in
+  # evaluation Phase 3: the per-segment list now states it exactly, and the
+  # vague "physical-goods categories" could contradict it.
   constraints_text:
     - "Invoice clearing is a financial control and may never be removed."
-    - "Goods receipt recording cannot be removed for physical-goods categories."
+  # Controls this log cannot verify. A proposal whose operations name a
+  # matching activity (in any role, including the `after` anchor, or as a new
+  # activity's name) is flagged, never blocked. BPI 2019 was published with
+  # its approval steps removed, so approvals and segregation of duties cannot
+  # be checked. Matched on the full log (2026-11-18, raw, 1,595,923 events):
+  # Change Approval for Purchase Order 7,541 events / 4,377 cases;
+  # SRM: Awaiting Approval 1,628 / 1,440 (both via the pattern);
+  # Release Purchase Order 1,610 / 961; Release Purchase Requisition 467 / 467
+  # (both listed by name). No other activity matches.
+  unverifiable_controls:
+    approval:
+      patterns:
+        - "Approv"            # case-insensitive search
+      activities:
+        - "Release Purchase Order"
+        - "Release Purchase Requisition"
+      flag: "approval/segregation of duties cannot be checked against this log"

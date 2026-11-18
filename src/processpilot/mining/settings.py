@@ -129,6 +129,21 @@ class ConformanceRule(BaseModel):
     description: str
     params: dict[str, str]
     applies_to_segments: list[str] | None = None
+    # Completed cases whose last activity is one of these are left out of the
+    # completed-cases figures of a must-occur rule. WHY: a case can be
+    # completed by cancelling it (e.g. a deleted order item), and a cancelled
+    # case legitimately lacks the activity; counting it would report the
+    # cancellation as a breakdown. The all-cases figures are unchanged.
+    exclude_completed_ending_in: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _exclusion_only_for_must_occur(self) -> ConformanceRule:
+        if self.exclude_completed_ending_in and self.type != "activity_must_occur":
+            raise ValueError(
+                f"rule {self.id}: exclude_completed_ending_in applies to activity_must_occur "
+                f"rules only, not {self.type}"
+            )
+        return self
 
     def applies_to(self, segment: str) -> bool:
         """``None`` means every segment, including the unsegmented ``<all>``."""

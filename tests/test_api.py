@@ -128,7 +128,7 @@ def test_bpi_sample_from_preset_to_approved_redesign(
         "consignment",
     }
     assert run["data_quality"]["cleaning_log"] == []  # the sample has no junk dates
-    assert run["evidence_schema_version"] == 2
+    assert run["evidence_schema_version"] == 3
     # Resource types (configs/bpi2019.yaml rules) on the 6,502 sample events.
     types = {t["type"]: t["event_count"] for t in run["data_quality"]["resource_types"]["types"]}
     assert types == {"human": 3089, "batch": 913, "unassigned": 2500}
@@ -147,6 +147,14 @@ def test_bpi_sample_from_preset_to_approved_redesign(
     assert client.get(f"/runs/{run_id}/segments/{slug}/variants/999/waits").status_code == 404
     model = client.get(f"/runs/{run_id}/segments/{slug}/model").json()
     assert model["default_constraints"]["protected_activities"] == ["Clear Invoice"]
+    assert model["preset_protected_activities"] == ["Clear Invoice"]
+    # Per-segment protection (evaluation Phase 3): goods receipt in Consignment.
+    consignment = client.get(f"/runs/{run_id}/segments/consignment/model").json()
+    assert consignment["preset_protected_activities"] == ["Clear Invoice", "Record Goods Receipt"]
+    assert consignment["default_constraints"]["protected_activities"] == [
+        "Clear Invoice",
+        "Record Goods Receipt",
+    ]
 
     a, b, c = model["activities"][:3]
     bn = bottlenecks[0]["id"]

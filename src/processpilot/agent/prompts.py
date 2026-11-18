@@ -23,7 +23,13 @@ from processpilot.mining.evidence import EvidenceItem
 
 # p3-v1: Phase 3. p4-v1: activity-wait evidence in the digest, add_check and
 # automate_activity, adjacency rule for parallelize/merge, unmodelled activities.
-PROMPT_VERSION = "p4-v1"
+# p5-v1 (evaluation Phase 3, 2026-11-18): the resource heading of the digest
+# names its four item kinds (RS, HO, RT, ST), because evidence schema 2 added
+# RT/ST and ST must not be read as handovers; the rendered constraints also
+# changed (protected activities per segment from the preset, the free-text
+# goods-receipt constraint removed from bpi2019.yaml). System prompt, task
+# texts and heuristic catalogue are unchanged.
+PROMPT_VERSION = "p5-v1"
 
 SYSTEM_PROMPT = """\
 You are ProcessPilot, a process-analysis assistant for business analysts. You \
@@ -54,7 +60,13 @@ _TYPE_HEADINGS: tuple[tuple[str, str, str], ...] = (
     ("activity", "Waiting time before each activity (ranked by impact)", ""),
     ("variant", "Variants (most frequent paths)", ""),
     ("rework", "Rework (repeated activities)", "No rework items were found in this segment."),
-    ("resource", "Resources and handovers", ""),
+    (
+        "resource",
+        "Resources: workload per person (RS), handovers between two different people "
+        "(HO), resource-type summaries (RT), and system/vendor transitions involving a "
+        "batch job or no recorded user (ST; these are not handovers)",
+        "",
+    ),
     (
         "conformance",
         "Conformance (rules and reference model)",

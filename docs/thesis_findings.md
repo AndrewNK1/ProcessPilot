@@ -149,6 +149,26 @@ Consignment ends in "Record Goods Receipt" for 90.6%. Caveat: in 2-way
 match "completed" nearly implies an invoice, so R-03 on completed cases is
 close to tautological there.
 
+**Cancelled items (2026-11-18, evidence schema 3).** A completed case can end
+in "Delete Purchase Order Item", and a deleted item legitimately has no invoice
+or goods receipt (domain fact D-14). For the must-occur rules R-03 and R-04
+those cases are now left out of the completed-cases figures (configurable per
+rule, `exclude_completed_ending_in`; the all-cases figures are unchanged). Full
+cleaned log, violations among completed cases before -> after (cases excluded):
+
+| Segment | Rule | Before | After | Excluded |
+|---|---|---|---|---|
+| 2-way match | R-03 | 1 / 169 (0.59%) | 0 / 166 (0.00%) | 3 |
+| 3-way, invoice after GR | R-03 | 303 / 9,544 (3.17%) | 2 / 9,242 (0.02%) | 302 |
+| 3-way, invoice after GR | R-04 | 292 / 9,544 (3.06%) | 1 / 9,242 (0.01%) | 302 |
+| 3-way, invoice before GR | R-03 | 7,760 / 179,259 (4.33%) | 375 / 171,845 (0.22%) | 7,414 |
+| 3-way, invoice before GR | R-04 | 7,866 / 179,259 (4.39%) | 516 / 171,845 (0.30%) | 7,414 |
+
+Almost every "completed case without invoice / goods receipt" was a deleted
+item. Consequence for the evaluation: with the answer-key rule ">1% of
+completed cases", R-03 and R-04 no longer enter the answer key in any segment
+(before the change they would have in both 3-way segments).
+
 **Reference-model conformance.** Supported (token-based replay) but BPI 2019
 has no reference model, so it is reported as "not performed". A model
 discovered from the same log is deliberately NOT used as reference: that would
@@ -194,7 +214,7 @@ counts as fitting; ProcessPilot counts such cases as non-conforming itself.
 - Human in the loop: the system never executes changes; an analyst approves
   or rejects every proposal.
 - Reproducibility: the model id requested and the model names the provider
-  served, prompt version (`p4-v1`), full prompts, raw outputs, stop/finish
+  served, prompt version (`p5-v1` since 2026-11-18; `p4-v1` before), full prompts, raw outputs, stop/finish
   reason, token usage (reasoning tokens separately), cost (estimated at list
   price), library versions and hardware are logged per run; a snapshot
   (`review_r<N>.json`) is written when a round reaches review, because
@@ -227,6 +247,31 @@ else is refused with a reason, and the agent is asked to revise.
 
 **Protected activities** (e.g. "Clear Invoice", a financial control) may not
 be removed, moved, merged or parallelised, but may be automated (user decision).
+Since evaluation Phase 3 (2026-11-18) they are configured **per segment** in the
+dataset preset: in BPI 2019 "Clear Invoice" is protected everywhere and "Record
+Goods Receipt" in both 3-way segments and in Consignment (not in 2-way match,
+which has no goods-receipt control). The preset's list is a floor: the analyst
+can protect more activities for a run but cannot unprotect a preset one. It is
+enforced twice in code, by the validator (the model must retry) and by
+`apply_operation` (an edit that reaches it is refused), not only in the prompt.
+The free-text constraint "Goods receipt recording cannot be removed for
+physical-goods categories" was removed, because the per-segment list now says
+exactly where it applies.
+
+**Unverifiable controls.** BPI 2019 was published with its approval steps
+removed, so ProcessPilot cannot check what a proposal does to approvals or to
+segregation of duties. A proposal is flagged, not blocked, when one of its
+operations names an approval activity in any role, including the `after`
+anchor of an added step, or introduces a new activity whose name matches. In
+BPI 2019 an approval activity is any name containing "Approv"
+(case-insensitive), plus "Release Purchase Order" and "Release Purchase
+Requisition". On the full raw log that is four activities: Change Approval for
+Purchase Order (7,541 events, 4,377 cases), SRM: Awaiting Approval
+(1,628 / 1,440), Release Purchase Order (1,610 / 961) and Release Purchase
+Requisition (467 / 467). The flag is stored with the proposal's validation
+result, appears in the review payload, `review_r<N>.json`, the run log and
+`summary.json`, and is shown as a warning on the proposal in the UI. It is
+not sent to the model.
 
 **Stable element IDs.** pm4py's tree-to-BPMN converter writes new random
 UUIDs on every export, which breaks diffs and overlays. ProcessPilot renders
@@ -498,6 +543,10 @@ check, as before.
   resources.
 - Conformance rules are hand-written domain rules; a wrong rule produces false
   findings (R-02 lesson).
+- Approval and segregation-of-duties effects of a proposal cannot be checked:
+  the published log has no approval steps. Proposals touching the four
+  approval/release activities are only flagged, and the flag depends on a
+  name pattern, so an approval step with an unusual name would be missed.
 - Open cases at extraction bias "missing activity" counts; partly handled by
   completed-case reporting.
 - No reference model for BPI 2019, so there are no model-deviation findings.
@@ -591,3 +640,8 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | 2026-11-17 | Resource types: workload ranks people only; a handover is between two different people; batch / no-user steps are system/vendor transitions (ST); empty values count as unassigned |
 | 2026-11-17 | HO shares stay over all transitions of the edge, with the ST share beside them |
 | 2026-11-17 | `evidence_schema_version` in every evidence.json and manifest.json (2 = resource types), shown in the UI |
+| 2026-11-16 | Record Goods Receipt protected in both 3-way segments and Consignment; Clear Invoice everywhere |
+| 2026-11-18 | Preset-protected activities are a floor the analyst cannot remove; shown as locked chips |
+| 2026-11-18 | Unverifiable-controls flag: approval activities = "Approv" pattern + Release PO / Release PR; an operation touches an activity it names in any role (incl. `after` anchors) or a new name that matches; flag never blocks |
+| 2026-11-18 | Prompt `p5-v1`: digest heading names RS / HO / RT / ST |
+| 2026-11-18 | Must-occur rules (R-03, R-04): completed cases ending in Delete Purchase Order Item excluded from the completed share; evidence schema 3 |

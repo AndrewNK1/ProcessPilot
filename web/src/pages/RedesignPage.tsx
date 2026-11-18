@@ -26,6 +26,7 @@ import { Itinerary } from "../Itinerary";
 import { useEstimateDraw, useStampLanding } from "../motion";
 import { BpmnView } from "../BpmnView";
 import { ApiProblem, Coupon, JobLine, Notice, Stamp, StatusStamp, Tabs, Tag } from "../ui";
+import { lockedOutsideModel, protectedChips, requestedProtection, unverifiableWarning } from "../controls";
 import { NoRuns, ScopeBar, useRunScope } from "./EvidencePage";
 
 const AUTOMATED_SUFFIX = " (automated)"; // must match processpilot.process_tree.AUTOMATED_SUFFIX
@@ -167,7 +168,10 @@ function StartRun({
   const job = useJob(jobId, (j) => j.status === "succeeded" && j.result?.agent_run_id && onStarted(j.result.agent_run_id));
   const defaults = model.data?.default_constraints ?? { text: [], protected_activities: [] };
   const activities = model.data?.activities ?? [];
+  const locked = model.data?.preset_protected_activities ?? [];
   const chosen = protectedSet ?? new Set(defaults.protected_activities.filter((a) => activities.includes(a)));
+  const chips = protectedChips(activities, locked, chosen);
+  const lockedElsewhere = lockedOutsideModel(activities, locked);
   const constraintsText = text ?? defaults.text.join("\n");
   const modelValue = modelId ?? health.data?.model_id ?? "";
   const start = useMutation({
@@ -177,7 +181,7 @@ function StartRun({
         segment.slug,
         {
           text: constraintsText.split("\n").map((l) => l.trim()).filter(Boolean),
-          protected_activities: [...chosen],
+          protected_activities: requestedProtection(locked, chosen),
         },
         modelValue.trim() || null,
       ),
@@ -202,11 +206,16 @@ function StartRun({
         <div className="field">
           <span className="label">Protected activities</span>
           <div className="chips" role="group" aria-label="Protected activities">
-            {activities.map((a) => (
-              <label key={a} className="chip">
+            {chips.map(({ activity: a, checked, locked: fixed }) => (
+              <label
+                key={a}
+                className={`chip${fixed ? " locked" : ""}`}
+                title={fixed ? "Set by preset: always protected in this segment" : undefined}
+              >
                 <input
                   type="checkbox"
-                  checked={chosen.has(a)}
+                  checked={checked}
+                  disabled={fixed}
                   onChange={(e) => {
                     const next = new Set(chosen);
                     if (e.target.checked) next.add(a);
@@ -215,10 +224,17 @@ function StartRun({
                   }}
                 />
                 {a}
+                {fixed && <small className="chip-note">set by preset</small>}
               </label>
             ))}
           </div>
-          <span className="hint">Never removed, moved, merged or parallelised. They may still be automated.</span>
+          <span className="hint">
+            Never removed, moved, merged or parallelised. They may still be automated. Activities set by preset are
+            always protected in this segment; you can protect more.
+          </span>
+          {lockedElsewhere.length > 0 && (
+            <span className="hint">Also protected by the preset, not in this model: {lockedElsewhere.join(", ")}.</span>
+          )}
           {model.data && model.data.unmodelled_activities.length > 0 && (
             <span className="hint">
               Too rare to be in the as-is model (can be discussed, not edited): {model.data.unmodelled_activities.join(", ")}.
@@ -406,6 +422,7 @@ function ProposalCoupon({
 }) {
   const p = view.proposal;
   const sound = view.validation?.soundness?.sound;
+  const unverifiable = unverifiableWarning(view);
   return (
     <Coupon
       no={`P${view.index + 1}`}
@@ -416,6 +433,13 @@ function ProposalCoupon({
       stub={<EstimateStub view={view} scales={scales} />}
     >
       <h2 style={{ fontSize: 19, lineHeight: "26px" }}>{p.title}</h2>
+      {unverifiable && (
+        <Notice tone="wait">
+          <Stamp tone="wait">Unverifiable control</Stamp>{" "}
+          {unverifiable.flags.join("; ")}. Touches {unverifiable.activities.join(", ")}: check this part of the
+          proposal by hand before approving.
+        </Notice>
+      )}
       {view.edit && view.edit.status !== "applied" && (
         <Notice tone="error">Edits could not be applied: {view.edit.message}</Notice>
       )}

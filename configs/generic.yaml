@@ -60,6 +60,10 @@ conformance_rules: []
 
 domain_knowledge: null
 
+# Keys as in bpi2019.yaml (see the comments there); nothing is protected or
+# flagged for an uploaded log until the analyst configures it.
 redesign:
   protected_activities: []
+  protected_activities_per_segment: {}
   constraints_text: []
+  unverifiable_controls: {}

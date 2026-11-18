@@ -168,6 +168,8 @@ export interface SegmentModel {
   activities: string[];
   unmodelled_activities: string[];
   default_constraints: Constraints | null;
+  // The preset's protected activities for this segment: a floor the analyst cannot remove.
+  preset_protected_activities: string[];
   preset: string | null;
 }
 
@@ -259,6 +261,10 @@ export interface ProposalView {
     message: string | null;
     soundness: { sound: boolean; method: string } | null;
     estimate: Estimate | null;
+    // Controls this log cannot verify that the proposal touches; a warning, never a block.
+    // Absent on runs validated before evaluation Phase 3.
+    unverifiable_controls?: string[];
+    unverifiable_activities?: string[];
   } | null;
 }
 

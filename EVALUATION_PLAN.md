@@ -360,3 +360,44 @@ Show me a screenshot of each panel populated with the dry-run campaign. Web test
   rebuilt.
 - Open: none blocking. The answer key (Phase 4) uses BN/CF only, so it is unaffected; the
   Phase 7 cost proxy should reuse `classify_resources`.
+
+## Phase 3 done (2026-11-18)
+
+- `agent/controls.py` (new): `ControlRules` parses the preset's `redesign` block once
+  (`extra="forbid"`; a per-segment key naming no segment of the run raises at agent start).
+  `protected_activities` (every segment) + `protected_activities_per_segment` (added, never
+  replacing). BPI: Clear Invoice everywhere; Record Goods Receipt in both 3-way segments and
+  Consignment. **Floor** (decision B): `AgentRunner.start` merges it into any request, and
+  `AgentContext.protected()` unions it again before the validator and `apply_operation`; the
+  UI shows preset chips checked, disabled, "set by preset". Free-text goods-receipt
+  constraint removed from `bpi2019.yaml`.
+- Unverifiable controls: `redesign.unverifiable_controls.approval` = pattern `Approv`
+  (case-insensitive) + Release Purchase Order / Release Purchase Requisition; flag text
+  "approval/segregation of duties cannot be checked against this log". An operation
+  touches every activity it names, incl. `after` anchors, and new names that match
+  (decision A). Full raw log: Change Approval for Purchase Order 7,541 events / 4,377 cases,
+  SRM: Awaiting Approval 1,628 / 1,440, Release Purchase Order 1,610 / 961, Release Purchase
+  Requisition 467 / 467; nothing else matches. `ProposalValidation.unverifiable_controls` /
+  `unverifiable_activities` (computed in `validate` for every proposal, never blocking, not
+  sent to the model); in the interrupt payload, `review_r<N>.json`, the validate log event,
+  `summary.json`, the notebook report and a warning stamp + notice on the proposal card.
+  `inputs.json` records `preset_protected_activities` and the control config.
+- `PROMPT_VERSION` p4-v1 -> **p5-v1** (reason in `prompts.py`): resource heading of the
+  digest now "Resources: workload per person (RS), handovers between two different people
+  (HO), resource-type summaries (RT), and system/vendor transitions involving a batch job or
+  no recorded user (ST; these are not handovers)"; rendered constraints changed via config.
+- Must-occur rules (decision C): `ConformanceRule.exclude_completed_ending_in` (must-occur
+  only, refused on order rules); R-03/R-04 exclude "Delete Purchase Order Item"; CF metrics
+  gain `completed_excluded_ending_in` / `completed_excluded_cases`; summary says so.
+  **Evidence schema 3.** UI legacy notice still keys on schema < 2 (resource types).
+  Full cleaned log, completed-cases violations before -> after (excluded cases):
+  2-way R-03 1/169 (0.59%) -> 0/166 (0.00%) (3); after GR R-03 303/9,544 (3.17%) ->
+  2/9,242 (0.02%), R-04 292/9,544 (3.06%) -> 1/9,242 (0.01%) (302); before GR R-03
+  7,760/179,259 (4.33%) -> 375/171,845 (0.22%), R-04 7,866/179,259 (4.39%) -> 516/171,845
+  (0.30%) (7,414). All-cases figures unchanged.
+- **Consequence for Phase 4d:** with the exclusion no R-03/R-04 completed share exceeds 1%,
+  so the answer key's ">1% of completed cases" clause selects no conformance item from these
+  rules (before: four items, both 3-way segments). For Andrew to note in Chapter 3/5.
+- Tests: 570 Python (542 + 28: `test_controls.py`, conformance exclusion, API per-segment
+  defaults), 13 web (+4, `controls.test.ts`); ruff clean; bundle rebuilt. No LLM calls.
+- Notebook 03: one line changed (`default_constraints(SEGMENT)`, new signature).

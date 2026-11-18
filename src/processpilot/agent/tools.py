@@ -58,7 +58,7 @@ class EvidenceTools:
         return self._of_type("rework")
 
     def get_resources(self) -> list[EvidenceItem]:
-        """Workload (RS-*) and handover (HO-*) items, or the RS-00 skip notice."""
+        """RS/HO/RT/ST items (workload, handovers, resource types, system transitions)."""
         return self._of_type("resource")
 
     def get_conformance(self) -> list[EvidenceItem]:

@@ -29,6 +29,7 @@ import pandas as pd
 from pydantic import ValidationError
 
 from processpilot.agent.catalogue import load_agent_settings
+from processpilot.agent.controls import ControlRules
 from processpilot.agent.graph import (
     AgentRunner,
     create_llm,
@@ -527,23 +528,27 @@ class Workspace:
         return [i.model_dump() for i in store.query(name, type_)]  # type: ignore[arg-type]
 
     def segment_model(self, run_id: str, slug: str) -> dict[str, Any]:
-        """Model activities, activities outside the model, and the default constraints."""
+        """Model activities, activities outside the model, and the default constraints.
+
+        ``preset_protected_activities`` are the floor the analyst cannot remove
+        (the agent runner adds them back to any request); the UI locks them.
+        """
         record, run_dir, name = self._segment(run_id, slug)
         tree = load_as_is_tree(run_dir, name)
         modelled = sorted(labels(tree)) if tree is not None else []
         observed = segment_activities(run_dir, name)
         defaults = None
+        locked: list[str] = []
         if record["preset"] is not None:
-            block = self._preset(record["preset"]).get("redesign") or {}
-            defaults = Constraints(
-                text=block.get("constraints_text") or [],
-                protected_activities=block.get("protected_activities") or [],
-            ).model_dump()
+            controls = ControlRules.from_preset(self._preset(record["preset"]))
+            defaults = controls.defaults_for(name).model_dump()
+            locked = controls.protected_for(name)
         return {
             "segment": name,
             "activities": modelled,
             "unmodelled_activities": sorted(set(observed) - set(modelled)),
             "default_constraints": defaults,
+            "preset_protected_activities": locked,
             "preset": record["preset"],
         }
 

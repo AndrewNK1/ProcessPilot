@@ -59,6 +59,7 @@ describe("resource types", () => {
     expect(schemaLabel(null)).toBe("evidence schema unknown");
     expect(schemaIsLegacy(1)).toBe(true);
     expect(schemaIsLegacy(2)).toBe(false);
+    expect(schemaIsLegacy(3)).toBe(false);
     expect(schemaIsLegacy(null)).toBe(false);
   });
 });

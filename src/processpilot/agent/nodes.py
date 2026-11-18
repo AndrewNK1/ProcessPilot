@@ -27,6 +27,7 @@ from langgraph.types import interrupt
 from pydantic import BaseModel, ValidationError
 
 from processpilot.agent.catalogue import AgentSettings, DomainKnowledge, HeuristicCatalogue
+from processpilot.agent.controls import ControlRules
 from processpilot.agent.llm import (
     COST_BASIS,
     ChatTurn,
@@ -114,11 +115,24 @@ class AgentContext:
     segment_dir: Path | None = None
     as_is_tree: TreeNode | None = None
     observed_activities: list[str] = field(default_factory=list)
+    controls: ControlRules = field(default_factory=ControlRules)
 
     @property
     def unmodelled_activities(self) -> list[str]:
         """Observed in the log but not part of the as-is model."""
         return sorted(set(self.observed_activities) - set(self.activities))
+
+    def protected(self, state: AgentState) -> frozenset[str]:
+        """The run's protected activities plus the preset's floor for this segment.
+
+        WHY the floor is added again here although ``AgentRunner.start`` already
+        merged it into the state: every check (validator, ``apply_operation``)
+        goes through this, so the preset's protection holds for any state,
+        however it was built.
+        """
+        return frozenset(state.constraints.protected_activities) | frozenset(
+            self.controls.protected_for(self.segment)
+        )
 
     def validation_context(self, state: AgentState) -> ValidationContext:
         """Checks are bound to this segment and the run's constraints."""
@@ -128,7 +142,7 @@ class AgentContext:
             activities=frozenset(self.activities),
             catalogue=self.catalogue,
             domain=self.domain,
-            protected_activities=frozenset(state.constraints.protected_activities),
+            protected_activities=self.protected(state),
             as_is_tree=self.as_is_tree,
             observed_activities=frozenset(self.observed_activities),
         )
@@ -236,9 +250,7 @@ def load_evidence(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
     """Index the segment's evidence and record the run's inputs. No LLM."""
     items = ctx.tools.all_items()
     index = [EvidenceRef(id=i.id, type=i.type, summary=i.summary) for i in items]
-    missing_protected = [
-        a for a in state.constraints.protected_activities if a not in ctx.activities
-    ]
+    missing_protected = [a for a in sorted(ctx.protected(state)) if a not in ctx.activities]
     ctx.logger.write_json(
         "inputs.json",
         {
@@ -258,6 +270,12 @@ def load_evidence(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             "prompt_version": PROMPT_VERSION,
             "system_prompt": SYSTEM_PROMPT,
             "constraints": state.constraints.model_dump(),
+            # The preset's share of the protection (a floor the analyst cannot
+            # remove) and the control rules flags are computed from.
+            "preset_protected_activities": ctx.controls.protected_for(ctx.segment),
+            "unverifiable_controls": {
+                k: v.model_dump() for k, v in ctx.controls.unverifiable_controls.items()
+            },
             "protected_activities_not_in_segment": missing_protected,
             "evidence_ids": [r.id for r in index],
             "activities": ctx.activities,
@@ -337,9 +355,7 @@ def _to_be_tree(state: AgentState, ctx: AgentContext, index: int) -> TreeNode:
     """Re-derive a proposal's to-be tree (deterministic, so not stored in state)."""
     assert state.proposals is not None and ctx.as_is_tree is not None
     ops = state.proposals.proposals[index].edit_operations
-    to_be, _ = apply_proposal(
-        ctx.as_is_tree, ops, frozenset(state.constraints.protected_activities)
-    )
+    to_be, _ = apply_proposal(ctx.as_is_tree, ops, ctx.protected(state))
     return to_be
 
 
@@ -366,7 +382,7 @@ def apply_edits(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             to_be, diff = apply_proposal(
                 ctx.as_is_tree,
                 proposal.edit_operations,
-                frozenset(state.constraints.protected_activities),
+                ctx.protected(state),
             )
         except EditError as exc:
             results.append(EditResult(proposal_index=i, status="failed", message=str(exc)))
@@ -389,17 +405,29 @@ def apply_edits(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
 
 
 def validate(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
-    """Pure code: soundness + replay ESTIMATE for every applied proposal."""
+    """Pure code: soundness + replay ESTIMATE for every applied proposal.
+
+    Also flags, for every proposal (applied or not), the unverifiable
+    controls its operations touch. A flag never changes the status.
+    """
     assert state.proposals is not None
     waits = _case_waits(ctx)
     rs = ctx.settings.redesign
     results: list[ProposalValidation] = []
     for edit in state.edit_results:
         i = edit.proposal_index
+        marks = ctx.controls.flag_proposal(state.proposals.proposals[i].edit_operations)
+        flagged = {
+            "unverifiable_controls": marks.flags,
+            "unverifiable_activities": marks.activities,
+        }
         if edit.status != "applied":
             results.append(
                 ProposalValidation(
-                    proposal_index=i, status="skipped", message="edits were not applied"
+                    proposal_index=i,
+                    status="skipped",
+                    message="edits were not applied",
+                    **flagged,
                 )
             )
             continue
@@ -416,6 +444,7 @@ def validate(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
                 soundness=soundness,
                 estimate=estimate,
                 message=None if waits is not None else "no case_waits.parquet; no estimate",
+                **flagged,
             )
         )
     ctx.logger.event("node", node="validate", results=[r.model_dump(mode="json") for r in results])
@@ -431,6 +460,14 @@ def validate(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             "round": len(state.review_history) + 1,
             **_model_record(ctx),
             "usage": ctx.logger.usage_totals(),
+            "unverifiable_controls": [
+                {
+                    "proposal_index": r.proposal_index,
+                    "flags": r.unverifiable_controls,
+                    "activities": r.unverifiable_activities,
+                }
+                for r in results
+            ],
             "reached_review_at": utc_now(),
         },
     )

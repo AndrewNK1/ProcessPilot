@@ -31,6 +31,11 @@ apart by a field. History:
    resource value was a handover in HO-*.
 2. (2026-11-17, evaluation Phase 2) resource types: RS-* people only; HO-*
    between two different people; new RT-* and ST-* items.
+3. (2026-11-18, evaluation Phase 3) CF-* of a must-occur rule with
+   ``exclude_completed_ending_in`` (BPI 2019: R-03, R-04 exclude cases ending
+   in Delete Purchase Order Item): the completed-cases figures leave those
+   cases out; ``completed_excluded_cases`` counts them. All-cases figures and
+   every other item are unchanged.
 """
 
 from __future__ import annotations
@@ -57,7 +62,7 @@ EvidenceType = Literal[
 ]
 
 # Bump when the meaning of an evidence item changes; see the module docstring.
-EVIDENCE_SCHEMA_VERSION = 2
+EVIDENCE_SCHEMA_VERSION = 3
 # What a file without the field is: written before versioning existed.
 UNVERSIONED_SCHEMA = 1
 
@@ -582,9 +587,15 @@ def _conformance_summary(c: ConformanceResult) -> str:
             f"({_pct(c.completed_violation_share)})"
         )
     )
+    excluded = (
+        f" (not counting {c.completed_excluded_cases:,} completed case(s) ending in "
+        f"{', '.join(c.completed_excluded_ending_in)}, which legitimately lack it)"
+        if c.completed_excluded_cases is not None
+        else ""
+    )
     tied = f"; {c.tied_cases:,} case(s) tie on timestamp (order unknown)" if c.tied_cases else ""
     return (
         f"Rule {c.rule_id} ({c.rule_name}) is violated in {c.violation_count:,} of "
         f"{c.evaluated_cases:,} evaluated cases ({_pct(c.violation_share)}); among completed "
-        f"cases: {completed}{tied}."
+        f"cases{excluded}: {completed}{tied}."
     )

@@ -865,6 +865,16 @@ input[type="radio"] {
   outline-offset: 2px;
 }
 
+/* Protected by the preset: checked and fixed, so no pointer and a quiet note. */
+.chip.locked {
+  cursor: default;
+}
+
+.chip-note {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
 .drop {
   border: 1px dashed var(--control);
   border-radius: var(--r-coupon);

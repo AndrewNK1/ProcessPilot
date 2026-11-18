@@ -58,6 +58,10 @@ def outcomes_markdown(
     out = []
     for edit in edit_results:
         out.append(f"### P{edit.proposal_index + 1}: edits {edit.status}")
+        v = checks.get(edit.proposal_index)
+        if v is not None and v.unverifiable_controls:
+            touched = ", ".join(v.unverifiable_activities)
+            out += [f"- **UNVERIFIABLE** ({touched}): {f}" for f in v.unverifiable_controls]
         if edit.status != "applied":
             out += [f"- {edit.message}", ""]
             continue
@@ -72,7 +76,6 @@ def outcomes_markdown(
                 if names:
                     out.append(f"- {label}: {', '.join(names)}")
         out.append(f"- to-be model: `{edit.to_be_bpmn_path}`")
-        v = checks.get(edit.proposal_index)
         if v is not None and v.soundness is not None:
             out.append(
                 f"- soundness: {'sound' if v.soundness.sound else 'NOT sound'} "

@@ -115,3 +115,92 @@ def test_timestamp_tie_is_not_a_violation() -> None:
     (result,) = check_rules(df, "<all>", [rule], [], 5)
     assert result.violation_count == 0
     assert result.tied_cases == 1
+
+
+# --- must-occur: completed cases ending in a cancellation (evaluation Phase 3) ---
+
+
+def _log(traces: dict[str, list[str]]) -> pd.DataFrame:
+    rows = [
+        (case, act, pd.Timestamp("2019-01-01") + pd.Timedelta(hours=i))
+        for case, acts in traces.items()
+        for i, act in enumerate(acts)
+    ]
+    df = pd.DataFrame(rows, columns=["case_id", "activity", "timestamp"])
+    df["case_id"] = df["case_id"].astype("string")
+    df["activity"] = df["activity"].astype("string")
+    df["timestamp"] = df["timestamp"].astype("datetime64[ns]")
+    return df
+
+
+def _invoice_rule(exclude: list[str]) -> ConformanceRule:
+    return ConformanceRule(
+        id="R-03",
+        name="invoice_must_occur",
+        type="activity_must_occur",
+        description="d",
+        params={"activity": "Invoice"},
+        exclude_completed_ending_in=exclude,
+    )
+
+
+def test_must_occur_excludes_completed_cases_ending_in_cancellation() -> None:
+    # Answer key. Completed = ends in Clear or Delete. Missing Invoice:
+    # c2 (ends Clear), c3 (ends Delete), c4 (ends Delete), c5 (open, ends Order).
+    # Without exclusion: completed c1..c4 -> 3 of 4 violate. With exclusion
+    # of Delete-ending cases: completed c1, c2 -> 1 of 2; 2 cases excluded.
+    df = _log(
+        {
+            "c1": ["Order", "Invoice", "Clear"],
+            "c2": ["Order", "Clear"],
+            "c3": ["Order", "Delete"],
+            "c4": ["Order", "Change", "Delete"],
+            "c5": ["Order"],
+        }
+    )
+    ends = ["Clear", "Delete"]
+    (before,) = check_rules(df, "<all>", [_invoice_rule([])], ends, 5)
+    (after,) = check_rules(df, "<all>", [_invoice_rule(["Delete"])], ends, 5)
+
+    assert (before.completed_violation_count, before.completed_evaluated_cases) == (3, 4)
+    assert before.completed_excluded_cases is None and before.completed_excluded_ending_in == []
+    assert (after.completed_violation_count, after.completed_evaluated_cases) == (1, 2)
+    assert after.completed_violation_share == 0.5
+    assert after.completed_excluded_cases == 2
+    assert after.completed_excluded_ending_in == ["Delete"]
+    # The all-cases figures do not change.
+    assert (after.violation_count, after.evaluated_cases) == (before.violation_count, 5) == (4, 5)
+
+
+def test_exclusion_is_refused_on_order_rules() -> None:
+    with pytest.raises(ValueError, match="activity_must_occur"):
+        ConformanceRule(
+            id="R-X",
+            name="x",
+            type="activity_a_before_activity_b",
+            description="d",
+            params={"a": "A", "b": "B"},
+            exclude_completed_ending_in=["Delete"],
+        )
+
+
+def test_exclusion_appears_in_the_evidence_summary() -> None:
+    from processpilot.mining.evidence import _conformance_summary
+
+    df = _log({"c1": ["Order", "Clear"], "c2": ["Order", "Delete"], "c3": ["Invoice"]})
+    (r,) = check_rules(df, "<all>", [_invoice_rule(["Delete"])], ["Clear", "Delete"], 5)
+    text = _conformance_summary(r)
+    assert "not counting 1 completed case(s) ending in Delete" in text
+    assert "1 of 1 (100.0%)" in text
+
+
+def test_bpi_preset_excludes_deleted_items_from_r03_r04() -> None:
+    from processpilot.config import load_preset_yaml
+
+    rules = {
+        r.id: r for r in MiningSettings.from_preset(load_preset_yaml("bpi2019")).conformance_rules
+    }
+    for rid in ("R-03", "R-04"):
+        assert rules[rid].exclude_completed_ending_in == ["Delete Purchase Order Item"]
+    assert rules["R-01"].exclude_completed_ending_in == []
+    assert rules["R-02"].exclude_completed_ending_in == []
