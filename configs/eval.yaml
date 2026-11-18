@@ -21,3 +21,23 @@ campaign:
 answer_key:
   top_n_bottlenecks: 3
   conformance_completed_share_gt: 0.01
+
+# Phase 5 (user decisions 2026-11-16/18). Gemini quota: 5 requests/minute and
+# 20/day per Google Cloud project; the day resets at midnight Pacific time.
+rate_limit:
+  providers: [google_genai]           # model-id prefixes that go through the limiter
+  min_seconds_between_calls: 20       # 5 RPM limit -> at most 3 calls/min, safety margin
+  seconds_between_runs: 180
+  daily_request_budget: 17            # quota is 20; leave headroom
+  # Start a run only if today's remaining budget covers its worst case
+  # (ProcessPilot: 2 calls + up to 2 validation retries each; baseline: 1 + 2).
+  worst_case_calls: {processpilot: 6, baseline: 3}
+  quota_timezone: America/Los_Angeles # quota day = calendar day here (zoneinfo)
+  display_timezone: Africa/Cairo      # reset times are shown in this zone
+  default_retry_seconds: 65           # per-minute 429 without a retryDelay
+  max_transport_retries: 5            # per call, for per-minute / unclassified 429s
+  max_server_retries: 3               # per call, for 5xx and timeouts
+  # One ledger for the whole Google project (app and runner share the quota),
+  # every line tagged with purpose/campaign. Relative to the project root;
+  # $PP_QUOTA_LEDGER overrides it.
+  ledger: outputs/quota/google_genai.jsonl

@@ -452,3 +452,44 @@ Show me a screenshot of each panel populated with the dry-run campaign. Web test
 - Tests: 590 Python (+20: `test_evaluation.py`, two in `test_api.py`), 16 web (+3); ruff clean;
   bundle rebuilt. No LLM calls. `outputs/` is gitignored, so the key and manifest are not in git;
   their SHA-256 values are recorded here and in SQLite.
+
+## Phase 5 done (2026-11-18)
+
+- Commit `1f7732f` first: byte-exact copies of `answer_key.json`, `answer_key.csv` and the draft
+  `manifest.json` under `docs/evaluation/eval-2026-11-v1/` (`.gitattributes` `-text`; committed
+  blobs hash to the recorded SHA-256 values).
+- **5a** `agent/ratelimit.py`: `RateLimitedLLM` wraps every call of a limited provider
+  (`google_genai`): 20 s gap since the last request in the ledger, budget 17 per quota day
+  (calendar day in America/Los_Angeles, reset via `zoneinfo`, shown in Africa/Cairo); one global
+  append-only ledger `outputs/quota/google_genai.jsonl` (`$PP_QUOTA_LEDGER`), a request line
+  (labels: purpose, campaign, run, segment, agent run, node, attempt) before every request and a
+  result line after it, file lock across processes; every request sent counts, 429s included.
+  429 per minute (quota id `PerMinute`) -> wait `retryDelay` or 65 s, repeat, max 5; 5xx/timeouts
+  -> same, max 3 (`TransportFailed` after); unclassified 429 -> as per minute, then stop; 429 per
+  day (`PerDay`) or budget used -> `QuotaStopped` with the next reset. Exact error payloads in
+  the ledger. Transport retries are attached to the `llm_call` event (`transport_retries`), never
+  counted as validation retries; `_call_validated` re-raises `RunStopped`. Gemini SDK retries off:
+  `max_retries: 1` (tested on the built request: attempts 1; library default 6). App agent runs
+  use the same limiter and ledger and are refused (409) when fewer than 6 requests are left.
+- **5b** `evaluation/runner.py` + `launch.py`, `scripts/eval/run_campaign.py`
+  (`--status`, `--dry-run`, `--max-runs`, `--only-condition`, `--smoke SEGMENT`,
+  `--accept-served-model MODEL`), `scripts/eval/run_daily.ps1` (Task Scheduler instructions, not
+  registered). Interleaved fixed order (`run_order.json`), strictly sequential, resumable; worst
+  case 6/3 checked before each run, 180 s between runs; outcomes `reached_review`,
+  `failed_validation` (done, never re-run), `transport_error` / `interrupted` (failed, retried as a
+  new attempt), `cut_short_quota` (quota_stopped, retried); every attempt in `eval_run.json`.
+  Graph left interrupted at review; served model checked after every call
+  (`campaign_state.json`), a change stops the runner until `--accept-served-model`. Campaign
+  logs, to-be models and checkpoints in the campaign folder; SQLite schema 3 adds
+  `agent_runs.log_dir` / `checkpoint_path`, so the app shows campaign runs read-only and refuses
+  decisions on them (409); the Redesign page shows why. Baseline slots stay pending ("not
+  available until Phase 6").
+- **5c** Dry run of the full ProcessPilot grid (`--dry-run`, scripted model, simulated clock,
+  namespace `outputs/eval/eval-2026-11-v1/dry-run/`, SQLite id `eval-2026-11-v1-dry`, purpose dev):
+  20/20 `reached_review`, 2 requests each, 0 retries; 4 simulated quota days (12/12/12/4 requests:
+  the 6-request worst case stops a day at 12). Zero API calls (the real ledger was never
+  created); frozen run unchanged (`check_frozen`: no differences). Real campaign status: draft,
+  grid not created, 17/17 left.
+- Tests: 620 Python (+30: `test_ratelimit.py`, `test_runner.py`), 16 web; ruff clean; bundle rebuilt.
+- Open: the live smoke run on 2-way match (needs Andrew's approval); 429 classification is
+  UNVERIFIED until a real 429 payload is in the ledger.

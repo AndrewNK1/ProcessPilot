@@ -28,6 +28,9 @@ History:
    ``campaign_id`` on runs and agent_runs, ``launched_by`` (app | batch) and
    ``condition`` (processpilot | baseline) on agent_runs; every existing row
    becomes ``dev``. New tables ``eval_campaigns`` and ``eval_runs``.
+3. (2026-11-18, evaluation Phase 5) ``log_dir`` and ``checkpoint_path`` on
+   agent_runs: campaign runs keep their logs and checkpoints in the campaign
+   folder, not in the mining run; NULL = the mining run's own folder.
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 PURPOSES = ("dev", "evaluation")
 
@@ -149,6 +152,10 @@ CREATE TABLE eval_runs (
     finished_at    TEXT,
     PRIMARY KEY (campaign_id, segment, condition, repetition)
 );
+""",
+    3: """
+ALTER TABLE agent_runs ADD COLUMN log_dir TEXT;
+ALTER TABLE agent_runs ADD COLUMN checkpoint_path TEXT;
 """,
 }
 
@@ -356,13 +363,16 @@ class Database:
         campaign_id: str | None = None,
         launched_by: str = "app",
         condition: str = "processpilot",
+        log_dir: str | None = None,
+        checkpoint_path: str | None = None,
     ) -> None:
         """Register an agent run as soon as the graph has created it."""
         now = utc_now()
         self._run(
             "INSERT INTO agent_runs (run_id, segment, agent_run_id, model_id, status, "
-            "created_at, updated_at, purpose, campaign_id, launched_by, condition) "
-            "VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)",
+            "created_at, updated_at, purpose, campaign_id, launched_by, condition, "
+            "log_dir, checkpoint_path) "
+            "VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 segment,
@@ -374,6 +384,8 @@ class Database:
                 campaign_id,
                 launched_by,
                 condition,
+                log_dir,
+                checkpoint_path,
             ),
         )
 
@@ -437,6 +449,58 @@ class Database:
         return self._all(
             "SELECT id, created_at, manifest_sha256, status FROM eval_campaigns "
             "ORDER BY created_at DESC, id DESC"
+        )
+
+    # --- evaluation runs (one row per campaign x segment x condition x repetition) --
+
+    _EVAL_FIELDS = frozenset(
+        {
+            "status",
+            "outcome",
+            "attempt_count",
+            "agent_run_id",
+            "baseline_path",
+            "calls_used",
+            "input_tokens",
+            "output_tokens",
+            "started_at",
+            "finished_at",
+        }
+    )
+
+    def add_eval_run(self, campaign_id: str, segment: str, condition: str, repetition: int) -> None:
+        """Create a pending row (no-op if it exists: the grid is created once)."""
+        self._run(
+            "INSERT OR IGNORE INTO eval_runs (campaign_id, segment, condition, repetition) "
+            "VALUES (?, ?, ?, ?)",
+            (campaign_id, segment, condition, repetition),
+        )
+
+    def eval_runs(self, campaign_id: str) -> list[dict[str, Any]]:
+        """Every row of a campaign."""
+        return self._all("SELECT * FROM eval_runs WHERE campaign_id = ?", (campaign_id,))
+
+    def eval_run(
+        self, campaign_id: str, segment: str, condition: str, repetition: int
+    ) -> dict[str, Any] | None:
+        """One row."""
+        return self._one(
+            "SELECT * FROM eval_runs WHERE campaign_id = ? AND segment = ? AND condition = ? "
+            "AND repetition = ?",
+            (campaign_id, segment, condition, repetition),
+        )
+
+    def update_eval_run(
+        self, campaign_id: str, segment: str, condition: str, repetition: int, **fields: Any
+    ) -> None:
+        """Set any of the progress fields."""
+        if not fields or set(fields) - self._EVAL_FIELDS:
+            raise ValueError(f"can only update {sorted(self._EVAL_FIELDS)}, got {sorted(fields)}")
+        assignments = ", ".join(f"{k} = ?" for k in fields)
+        self._run(
+            f"UPDATE eval_runs SET {assignments} WHERE campaign_id = ? AND segment = ? "
+            "AND condition = ? AND repetition = ?",
+            (*fields.values(), campaign_id, segment, condition, repetition),
         )
 
     # --- decisions -----------------------------------------------------------

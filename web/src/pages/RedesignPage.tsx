@@ -153,7 +153,7 @@ function Head({ run, segment, detail }: { run: Run; segment: Segment; detail: Ag
           <span className="landing" ref={stamp}>
             <StatusStamp status={detail.status} tilt />
           </span>
-          {detail.awaiting_review && (
+          {detail.awaiting_review && detail.launched_by !== "batch" && (
             <a className="btn primary" href="#decision">
               Go to the decision <ArrowRight size={16} />
             </a>
@@ -377,7 +377,13 @@ function AgentRunView({
       )}
 
       {/* Keyed by round: each round gets an empty form, never the previous round's choice. */}
-      {detail.awaiting_review && (
+      {detail.awaiting_review && detail.launched_by === "batch" && (
+        <Notice tone="wait">
+          Made by the campaign runner{detail.campaign_id ? ` (${detail.campaign_id})` : " (smoke run)"}. Evaluation runs stay
+          paused at review; no decision is taken on them.
+        </Notice>
+      )}
+      {detail.awaiting_review && detail.launched_by !== "batch" && (
         <DecisionForm key={`${detail.agent_run_id}-${detail.review_round}`} run={run} segment={segment} detail={detail} />
       )}
       <DecisionLog detail={detail} />

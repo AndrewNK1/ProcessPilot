@@ -44,6 +44,7 @@ from processpilot.agent.prompts import (
     render_digest,
     retry_prompt,
 )
+from processpilot.agent.ratelimit import RunStopped, call_labels
 from processpilot.agent.runlog import RunLogger, utc_now
 from processpilot.agent.state import (
     AgentState,
@@ -185,8 +186,14 @@ def _call_validated(
     for attempt in range(ctx.settings.max_retries + 1):
         started = utc_now()
         try:
-            resp = ctx.llm.invoke(turns, schema)
-        except Exception as exc:  # transport/auth errors: the SDK already retried
+            with call_labels(node=node, attempt=attempt):
+                resp = ctx.llm.invoke(turns, schema)
+        except RunStopped as exc:
+            # Quota or served-model stop: not the model's fault, not a validation
+            # failure; the run ends here and the caller decides (runner/app).
+            ctx.logger.event("run_stopped", node=node, attempt=attempt, reason=str(exc))
+            raise
+        except Exception as exc:  # transport/auth errors after the limiter's retries
             ctx.logger.event("llm_error", node=node, attempt=attempt, error=repr(exc))
             raise NodeFailure(node, [], detail=f"model call raised {exc!r}") from exc
 
@@ -218,6 +225,9 @@ def _call_validated(
             usage=resp.usage.model_dump(),
             cost_usd=cost_usd(resp.usage, price),
             cost_basis=COST_BASIS,
+            # Repeated requests before this answer (429/5xx/timeouts); never
+            # counted as validation retries.
+            transport_retries=resp.transport_retries,
         )
         if not issues and parsed is not None:
             return parsed, []

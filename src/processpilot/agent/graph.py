@@ -56,6 +56,8 @@ from processpilot.redesign.bpmn_edit import load_tree
 CHECKPOINT_FILE = "checkpoints.sqlite"
 
 NodeCallback = Callable[[str], None]
+# (segment, agent_run_id) -> the folder an agent run logs to.
+LogDirFor = Callable[[str, str], Path]
 
 
 def build_graph(ctx: AgentContext, checkpointer: Any = None) -> CompiledStateGraph:
@@ -174,8 +176,15 @@ class AgentRunner:
         settings: AgentSettings | None = None,
         catalogue: HeuristicCatalogue | None = None,
         domain: DomainKnowledge | None = None,
+        checkpoint_path: Path | None = None,
+        log_dir_for: LogDirFor | None = None,
     ) -> None:
-        """Load evidence and configuration; the model is created lazily."""
+        """Load evidence and configuration; the model is created lazily.
+
+        ``checkpoint_path`` and ``log_dir_for`` default to the mining run's own
+        folder. Campaign runs pass the campaign folder instead, so the frozen
+        mining run is only ever read (evaluation Phase 5).
+        """
         self.run_dir = Path(run_dir)
         self.run_id = self.run_dir.name
         self.preset = preset
@@ -188,7 +197,14 @@ class AgentRunner:
         self.controls = ControlRules.from_preset(preset)
         self.controls.check_segments(self.store.segments())
         self.llm = llm or create_llm(model_id_from_env(self.settings), self.settings)
-        self._saver, self._conn = open_checkpointer(self.run_dir / CHECKPOINT_FILE)
+        self._log_dir_for = log_dir_for or (
+            lambda segment, agent_run_id: (
+                self.run_dir / segment_slug(segment) / "agent" / agent_run_id
+            )
+        )
+        self._saver, self._conn = open_checkpointer(
+            checkpoint_path or self.run_dir / CHECKPOINT_FILE
+        )
 
     def __enter__(self) -> AgentRunner:
         """Context-manager entry."""
@@ -224,7 +240,7 @@ class AgentRunner:
             domain=self.domain,
             settings=self.settings,
             llm=self.llm,
-            logger=RunLogger(seg_dir / "agent" / agent_run_id),
+            logger=RunLogger(self._log_dir_for(segment, agent_run_id)),
             segment_dir=seg_dir,
             as_is_tree=tree,
             observed_activities=observed,

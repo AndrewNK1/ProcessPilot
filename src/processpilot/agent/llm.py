@@ -52,6 +52,10 @@ class LLMResponse(BaseModel):
     stop_reason: str | None = None
     served_model: str | None = None
     usage: TokenUsage = Field(default_factory=TokenUsage)
+    # Requests repeated by the rate limiter before this answer (429 per minute,
+    # 5xx, timeouts). Transport retries are not validation retries: they say
+    # nothing about the model's output and are reported separately.
+    transport_retries: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class StructuredLLM(Protocol):

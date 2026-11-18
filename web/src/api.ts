@@ -201,6 +201,10 @@ export interface PathWaits {
 export interface AgentRunSummary {
   agent_run_id: string;
   model_id: string;
+  // Evaluation Phase 5: runs made by the campaign runner stay paused at review (the API refuses decisions).
+  launched_by?: "app" | "batch";
+  purpose?: "dev" | "evaluation";
+  campaign_id?: string | null;
   status: AgentStatus;
   created_at: string;
   updated_at: string;

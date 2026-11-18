@@ -560,6 +560,25 @@ or deleted items. A diagnosis that reports these as compliance problems is there
 supported by the completed-case evidence; Phase 7 measures this ("unsupported compliance
 claims", user decision 2026-11-18).
 
+**Rate limiting and quota accounting (Phase 5, 2026-11-18).** The Gemini quota (5
+requests per minute, 20 per day per Google Cloud project) is enforced in code, not by
+hand. Every model request, including validation retries, passes one limiter: at least
+20 s between requests, at most 17 requests per quota day (the calendar day in Los Angeles,
+whose midnight is when Google resets the quota), and a run starts only if the day's
+remaining budget covers its worst case (6 requests for ProcessPilot, 3 for the
+baseline). Every request is written to one shared ledger and counts whatever its
+outcome, including requests refused with a 429 (whether Google counts those is
+UNVERIFIED, so counting them is the conservative choice). The Gemini SDK's own retries
+are off (its default would send up to 6 hidden attempts). A per-minute 429, a server
+error or a timeout is waited out and repeated; these **transport retries** are logged
+apart from **validation retries**, which are a result of the model's output. A per-day
+429 stops the run; the run is later repeated as a new attempt and the cut-short attempt
+is kept and labelled. Runs are executed strictly one after another in a fixed,
+interleaved order (repetition 1 of every segment and condition first), so a problem on
+a late day affects all segments and conditions alike. A run whose output still fails
+validation after the retries is a result and is never repeated. Runs stop at the human
+review step; no decision is taken in the evaluation.
+
 ## 6. Limitations to state
 
 - Single-timestamp log: waiting and processing time cannot be separated.
@@ -684,3 +703,6 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | 2026-11-18 | Campaign drafted before the LLM runs, sealed after Phases 5-6; sealing re-checks the frozen files and the answer key |
 | 2026-11-18 | The app refuses agent runs on the evaluation mining run |
 | 2026-11-18 | Phase 7 measures compliance problems claimed by a diagnosis but not supported by the evidence |
+| 2026-11-18 | Gemini limits enforced in code: 20 s gap, 17 requests per Pacific day, worst-case check before a run (6 / 3), one shared ledger for app and runner |
+| 2026-11-18 | Every request sent counts against the budget, including 429s; SDK retries off; 5xx/timeouts handled like per-minute 429s (max 3 retries) |
+| 2026-11-18 | Campaign runs, logs and checkpoints live in the campaign folder; a stopped run is repeated as a new attempt and the cut-short attempt is kept |

@@ -65,10 +65,16 @@ model:
     # change of the default cannot silently change the evaluation. In
     # langchain-google-genai 4.4.2 `thinking_level` is the alias of the
     # `reasoning_effort` field and is sent as generationConfig.thinkingConfig.
+    # max_retries: 1 = the first request only, no SDK retries (evaluation
+    # Phase 5). langchain-google-genai 4.4.2 documents 1 (not 0) as "no
+    # retries"; its default is 6, which would send hidden requests that the
+    # quota ledger cannot see. 429s, 5xx and timeouts are handled by
+    # agent/ratelimit.py instead.
     google_genai:
       seed: 42
       max_output_tokens: 16000
       thinking_level: medium
+      max_retries: 1
   # Caveats copied into every run's inputs.json and summary.json for the
   # provider in use, so a reader of the logs sees what a setting does not do.
   notes:

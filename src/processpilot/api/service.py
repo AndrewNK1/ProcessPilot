@@ -38,6 +38,14 @@ from processpilot.agent.graph import (
     segment_activities,
 )
 from processpilot.agent.llm import ChatTurn, LLMResponse
+from processpilot.agent.ratelimit import (
+    QuotaLedger,
+    RateLimitSettings,
+    SystemClock,
+    budget,
+    call_labels,
+    with_rate_limit,
+)
 from processpilot.agent.state import AgentState, Constraints, ReviewDecision
 from processpilot.api.db import Database
 from processpilot.api.jobs import JobRunner
@@ -598,13 +606,47 @@ class Workspace:
 
     # --- agent runs ----------------------------------------------------------
 
-    def _runner(self, run_dir: Path, preset_name: str | None, model_id: str | None) -> AgentRunner:
+    def _runner(
+        self,
+        run_dir: Path,
+        preset_name: str | None,
+        model_id: str | None,
+        agent: dict[str, Any] | None = None,
+    ) -> AgentRunner:
+        """A runner for the run; ``agent`` (its index row) points at a campaign's folders.
+
+        Models of rate-limited providers (Gemini) go through the shared limiter
+        and quota ledger, the same ones the campaign runner uses.
+        """
         if preset_name is None:
             raise Conflict("choose the preset this run was mined with before running the agent")
         preset = self._preset(preset_name)
+        paths: dict[str, Any] = {}
+        if agent is not None and agent.get("checkpoint_path"):
+            log_dir = Path(agent["log_dir"])
+            paths = {
+                "checkpoint_path": Path(agent["checkpoint_path"]),
+                "log_dir_for": lambda _segment, _agent_run_id: log_dir,
+            }
         if model_id is None:
-            return AgentRunner(run_dir, preset, llm=_ReadOnlyModel())
-        return AgentRunner(run_dir, preset, llm=create_llm(model_id, load_agent_settings()))
+            return AgentRunner(run_dir, preset, llm=_ReadOnlyModel(), **paths)
+        llm = with_rate_limit(create_llm(model_id, load_agent_settings()))
+        return AgentRunner(run_dir, preset, llm=llm, **paths)
+
+    def _check_budget(self, model_id: str) -> None:
+        """409 when today's quota cannot cover a run's worst case (limited providers only)."""
+        settings = RateLimitSettings.load()
+        if not settings.limits(model_id):
+            return
+        provider = model_id.split(":", 1)[0]
+        ledger = QuotaLedger(settings.ledger_path())
+        b = budget(ledger, settings, provider, SystemClock().now())
+        need = settings.worst_case_calls["processpilot"]
+        if b.remaining < need:
+            raise Conflict(
+                f"today's {provider} budget has {b.remaining} of {settings.daily_request_budget} "
+                f"requests left; an agent run may need {need}. Next reset {b.reset_shown}"
+            )
 
     def start_agent(
         self,
@@ -631,13 +673,18 @@ class Workspace:
                 model_id = model_id_from_env(load_agent_settings())
             except OSError as exc:
                 raise Invalid(str(exc)) from exc
+        self._check_budget(model_id)
         with self._runner(run_dir, record["preset"], None) as r:
             agent_run_id = r.new_agent_run_id(name)
         self.db.add_agent_run(run_id, name, agent_run_id, model_id)
 
         def run(progress: Callable[[str], None]) -> dict[str, Any]:
             progress(f"agent started (model {model_id})")
-            with self._runner(run_dir, record["preset"], model_id) as r:
+            labels = {"purpose": "dev", "source": "app", "run_id": run_id, "segment": name}
+            with (
+                call_labels(**labels, agent_run_id=agent_run_id),
+                self._runner(run_dir, record["preset"], model_id) as r,
+            ):
                 _, state = r.start(
                     name,
                     constraints,
@@ -678,7 +725,7 @@ class Workspace:
         busy = self._busy(agent_run_id)
         state: AgentState | None = None
         pending: dict[str, Any] | None = None
-        with self._runner(run_dir, record["preset"], None) as r:
+        with self._runner(run_dir, record["preset"], None, agent) as r:
             try:
                 state = r.state(name, agent_run_id)
                 pending = None if busy else r.pending_review(name, agent_run_id)
@@ -714,14 +761,15 @@ class Workspace:
 
     def to_be_bpmn(self, run_id: str, slug: str, agent_run_id: str, index: int) -> str:
         """The to-be BPMN XML of one proposal of the latest round."""
-        record, run_dir, name, _ = self._agent_record(run_id, slug, agent_run_id)
-        with self._runner(run_dir, record["preset"], None) as r:
+        record, run_dir, name, agent = self._agent_record(run_id, slug, agent_run_id)
+        with self._runner(run_dir, record["preset"], None, agent) as r:
             state = r.state(name, agent_run_id)
         edit = next((e for e in state.edit_results if e.proposal_index == index), None)
         if edit is None or edit.to_be_bpmn_path is None:
             raise NotFound(f"proposal {index} has no to-be model")
         path = Path(edit.to_be_bpmn_path).resolve()
-        if not path.is_relative_to(run_dir.resolve()) or not path.is_file():
+        home = Path(agent["log_dir"]).resolve() if agent.get("log_dir") else run_dir.resolve()
+        if not path.is_relative_to(home) or not path.is_file():
             raise NotFound(f"to-be model of proposal {index} is not in run {run_id}")
         return path.read_text(encoding="utf-8")
 
@@ -739,6 +787,12 @@ class Workspace:
         or not the following redesign round succeeds.
         """
         record, run_dir, name, agent = self._agent_record(run_id, slug, agent_run_id)
+        if agent.get("launched_by") == "batch" or agent.get("purpose") == "evaluation":
+            raise Conflict(
+                f"agent run {agent_run_id} was made by the campaign runner "
+                f"({agent.get('campaign_id') or 'smoke run'}); evaluation runs stay paused at "
+                "review and take no decisions"
+            )
         if self._busy(agent_run_id):
             raise Conflict("this agent run is still working; wait for its job to finish")
         with self._runner(run_dir, record["preset"], None) as r:
@@ -761,7 +815,11 @@ class Workspace:
 
         def run(progress: Callable[[str], None]) -> dict[str, Any]:
             progress(f"resuming after '{decision.decision}'")
-            with self._runner(run_dir, record["preset"], agent["model_id"]) as r:
+            labels = {"purpose": "dev", "source": "app", "run_id": run_id, "segment": name}
+            with (
+                call_labels(**labels, agent_run_id=agent_run_id),
+                self._runner(run_dir, record["preset"], agent["model_id"]) as r,
+            ):
                 state = r.resume(
                     name,
                     agent_run_id,
