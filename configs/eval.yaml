@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------
+# Evaluation settings (EVALUATION_PLAN.md). Read by src/processpilot/evaluation
+# and the scripts in scripts/eval/. Not a dataset preset (no `discovery`).
+#
+# Phase 5 adds `rate_limit`, Phase 6 adds `baseline`; sealing a campaign
+# refuses until both exist, because the sealed manifest must record them.
+# ---------------------------------------------------------------------------
+
+campaign:
+  # The frozen mining run must have been mined with this preset (checked when
+  # the campaign is drafted; the preset's content hash is checked again on
+  # sealing and before every run).
+  preset: bpi2019
+  repetitions: 5
+  conditions: [processpilot, baseline]
+
+# The RQ1 reference list. Fixed in the thesis methodology (Chapter 3); do not
+# tune. Per segment: the top-N bottlenecks by impact, plus every conformance
+# rule whose completed-case violation share is strictly greater than the
+# threshold. If no rule passes, the key holds the bottlenecks only and says so.
+answer_key:
+  top_n_bottlenecks: 3
+  conformance_completed_share_gt: 0.01

@@ -441,7 +441,13 @@ class Workspace:
                 self.db.update_run(run["run_id"], status="mined" if done else "failed")
 
     def sync_runs(self) -> int:
-        """Register complete run folders the index does not know (e.g. notebook runs)."""
+        """Register complete run folders the index does not know (e.g. notebook runs).
+
+        A manifest that names an existing preset (``source.preset``, written by
+        the app, ``mine_log(preset_name=...)`` and the evaluation scripts) is
+        registered with it, so the run does not show "Preset not named".
+        Older manifests without one stay unnamed until the analyst names them.
+        """
         added = 0
         for directory in sorted(p for p in self.runs_dir.iterdir() if p.is_dir()):
             manifest = _read_json(directory / "manifest.json")
@@ -451,11 +457,22 @@ class Workspace:
                 directory.name,
                 "disk",
                 "mined",
+                preset=self._known_preset((manifest.get("source") or {}).get("preset")),
                 evidence_count=manifest.get("evidence_count"),
                 created_at=manifest.get("created_at"),
             )
             added += 1
         return added
+
+    def _known_preset(self, name: object) -> str | None:
+        """``name`` if it is an existing dataset preset, else ``None`` (never guessed)."""
+        if not isinstance(name, str) or not name:
+            return None
+        try:
+            self._preset(name)
+        except Invalid:
+            return None
+        return name
 
     def _run_record(self, run_id: str) -> dict[str, Any]:
         record = self.db.run(run_id)
@@ -596,8 +613,19 @@ class Workspace:
         constraints: Constraints | None = None,
         model_id: str | None = None,
     ) -> str:
-        """Job: run the agent on one segment until it waits for review."""
+        """Job: run the agent on one segment until it waits for review.
+
+        Refused (409) on an evaluation mining run: its agent runs are made by
+        the campaign runner only, so the frozen run stays exactly as the
+        campaign manifest hashed it and no app run mixes into the evaluation.
+        """
         record, run_dir, name = self._segment(run_id, slug)
+        if record.get("purpose") == "evaluation":
+            raise Conflict(
+                f"run {run_id} is an evaluation mining run (campaign "
+                f"{record.get('campaign_id') or 'not yet assigned'}); agent runs on it are "
+                "started by the campaign runner, not from the app"
+            )
         if model_id is None:
             try:
                 model_id = model_id_from_env(load_agent_settings())

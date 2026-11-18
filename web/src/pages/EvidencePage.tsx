@@ -16,12 +16,23 @@ import { Itinerary } from "../Itinerary";
 import { BpmnView } from "../BpmnView";
 import { ApiProblem, Kpis, Notice, ResourceTypesTable, Tabs, Tag } from "../ui";
 import { schemaIsLegacy, schemaLabel } from "../resourceTypes";
+import { hiddenEvaluationCount, pickableRuns, purposeLabel, purposeOf } from "../runPurpose";
+import { usePersisted } from "../hooks";
 
 /** Resolve run and segment from the URL, else the remembered scope, else the newest run. */
 export function useRunScope(base: "evidence" | "redesign") {
   const { runId, slug } = useParams();
   const runs = useQuery({ queryKey: ["runs"], queryFn: api.runs });
-  const mined = (runs.data ?? []).filter((r) => r.status === "mined");
+  const [showEval, setShowEval] = usePersisted("pp-show-eval", "0");
+  const allMined = (runs.data ?? []).filter((r) => r.status === "mined");
+  const pickable = pickableRuns(allMined, showEval === "1", runId);
+  // Only evaluation runs exist: show them rather than an empty picker.
+  const mined = pickable.length ? pickable : allMined;
+  const evalToggle = {
+    shown: showEval === "1",
+    hidden: hiddenEvaluationCount(allMined, showEval === "1"),
+    set: (on: boolean) => setShowEval(on ? "1" : "0"),
+  };
   const remembered = readScope();
   const wantedRun = runId ?? (mined.some((r) => r.run_id === remembered.runId) ? remembered.runId : mined[0]?.run_id);
   const run = useQuery({ queryKey: ["run", wantedRun], queryFn: () => api.run(wantedRun as string), enabled: !!wantedRun });
@@ -35,19 +46,29 @@ export function useRunScope(base: "evidence" | "redesign") {
     run.data && segment && (runId !== run.data.run_id || slug !== segment.slug)
       ? `/${base}/${run.data.run_id}/${segment.slug}`
       : null;
-  return { runs, mined, run, segment, redirect, unknownSegment: !!slug && !!run.data && !segment };
+  return { runs, mined, run, segment, redirect, unknownSegment: !!slug && !!run.data && !segment, evalToggle };
 }
+
+export interface EvalToggle {
+  shown: boolean;
+  hidden: number;
+  set: (on: boolean) => void;
+}
+
+type PickRun = { run_id: string; preset: string | null; purpose?: "dev" | "evaluation" };
 
 export function ScopeBar({
   base,
   run,
   segment,
   mined,
+  evalToggle,
 }: {
   base: "evidence" | "redesign";
   run: Run;
   segment: Segment;
-  mined: { run_id: string; preset: string | null }[];
+  mined: PickRun[];
+  evalToggle: EvalToggle;
 }) {
   const navigate = useNavigate();
   return (
@@ -68,10 +89,14 @@ export function ScopeBar({
           <select id="run-pick" value={run.run_id} onChange={(e) => navigate(`/${base}/${e.target.value}`)}>
             {mined.map((r) => (
               <option key={r.run_id} value={r.run_id}>
-                Run {r.run_id} · {r.preset ?? "preset not named"}
+                Run {r.run_id} · {r.preset ?? "preset not named"} · {purposeLabel(purposeOf(r))}
               </option>
             ))}
           </select>
+          <label className="check-line">
+            <input type="checkbox" checked={evalToggle.shown} onChange={(e) => evalToggle.set(e.target.checked)} />
+            Show evaluation runs{evalToggle.hidden > 0 ? ` (${evalToggle.hidden} hidden)` : ""}
+          </label>
         </div>
       </div>
     </div>
@@ -97,17 +122,27 @@ export function NoRuns() {
 }
 
 export function EvidencePage() {
-  const { runs, mined, run, segment, redirect, unknownSegment } = useRunScope("evidence");
+  const { runs, mined, run, segment, redirect, unknownSegment, evalToggle } = useRunScope("evidence");
   if (redirect) return <Navigate to={redirect} replace />;
   if (runs.isError) return <ApiProblem error={runs.error} />;
   if (runs.data && mined.length === 0) return <NoRuns />;
   if (run.isError) return <ApiProblem error={run.error} />;
   if (unknownSegment) return <Notice tone="error">This run has no such segment.</Notice>;
   if (!run.data || !segment) return <p className="muted">Loading the run…</p>;
-  return <SegmentEvidence run={run.data} segment={segment} mined={mined} />;
+  return <SegmentEvidence run={run.data} segment={segment} mined={mined} evalToggle={evalToggle} />;
 }
 
-function SegmentEvidence({ run, segment, mined }: { run: Run; segment: Segment; mined: { run_id: string; preset: string | null }[] }) {
+function SegmentEvidence({
+  run,
+  segment,
+  mined,
+  evalToggle,
+}: {
+  run: Run;
+  segment: Segment;
+  mined: PickRun[];
+  evalToggle: EvalToggle;
+}) {
   const items = useQuery({
     queryKey: ["evidence", run.run_id, segment.slug],
     queryFn: () => api.evidence(run.run_id, segment.slug),
@@ -147,7 +182,7 @@ function SegmentEvidence({ run, segment, mined }: { run: Run; segment: Segment; 
         </Link>
       </div>
 
-      <ScopeBar base="evidence" run={run} segment={segment} mined={mined} />
+      <ScopeBar base="evidence" run={run} segment={segment} mined={mined} evalToggle={evalToggle} />
       {run.preset === null && <PresetNotice run={run} />}
       {items.isError && <ApiProblem error={items.error} />}
 

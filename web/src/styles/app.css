@@ -865,6 +865,30 @@ input[type="radio"] {
   outline-offset: 2px;
 }
 
+/* Run purpose (evaluation Phase 4): a quiet label in the shell's scope block. */
+.purpose-tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--control);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.purpose-tag.evaluation {
+  border-color: var(--ink);
+}
+
+.check-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: var(--fs-small);
+  cursor: pointer;
+}
+
 /* Protected by the preset: checked and fixed, so no pointer and a quiet note. */
 .chip.locked {
   cursor: default;

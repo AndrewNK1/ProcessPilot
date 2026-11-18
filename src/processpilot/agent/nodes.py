@@ -71,7 +71,7 @@ from processpilot.redesign.soundness import check_soundness
 
 M = TypeVar("M", bound=BaseModel)
 
-_AGENT_PACKAGES = (
+AGENT_PACKAGES = (
     "processpilot",
     "pydantic",
     "langgraph",
@@ -283,7 +283,7 @@ def load_evidence(state: AgentState, ctx: AgentContext) -> dict[str, Any]:
             "domain_knowledge": None
             if ctx.domain is None
             else {"domain": ctx.domain.domain, "version": ctx.domain.version},
-            "library_versions": library_versions(_AGENT_PACKAGES),
+            "library_versions": library_versions(AGENT_PACKAGES),
             "hardware": hardware_info(),
             "started_at": utc_now(),
         },

@@ -27,22 +27,33 @@ import { useEstimateDraw, useStampLanding } from "../motion";
 import { BpmnView } from "../BpmnView";
 import { ApiProblem, Coupon, JobLine, Notice, Stamp, StatusStamp, Tabs, Tag } from "../ui";
 import { lockedOutsideModel, protectedChips, requestedProtection, unverifiableWarning } from "../controls";
-import { NoRuns, ScopeBar, useRunScope } from "./EvidencePage";
+import { type EvalToggle, NoRuns, ScopeBar, useRunScope } from "./EvidencePage";
+import { purposeOf } from "../runPurpose";
 
 const AUTOMATED_SUFFIX = " (automated)"; // must match processpilot.process_tree.AUTOMATED_SUFFIX
 
 export function RedesignPage() {
-  const { runs, mined, run, segment, redirect, unknownSegment } = useRunScope("redesign");
+  const { runs, mined, run, segment, redirect, unknownSegment, evalToggle } = useRunScope("redesign");
   if (redirect) return <Navigate to={redirect} replace />;
   if (runs.isError) return <ApiProblem error={runs.error} />;
   if (runs.data && mined.length === 0) return <NoRuns />;
   if (run.isError) return <ApiProblem error={run.error} />;
   if (unknownSegment) return <Notice tone="error">This run has no such segment.</Notice>;
   if (!run.data || !segment) return <p className="muted">Loading the run…</p>;
-  return <SegmentRedesign run={run.data} segment={segment} mined={mined} />;
+  return <SegmentRedesign run={run.data} segment={segment} mined={mined} evalToggle={evalToggle} />;
 }
 
-function SegmentRedesign({ run, segment, mined }: { run: Run; segment: Segment; mined: { run_id: string; preset: string | null }[] }) {
+function SegmentRedesign({
+  run,
+  segment,
+  mined,
+  evalToggle,
+}: {
+  run: Run;
+  segment: Segment;
+  mined: { run_id: string; preset: string | null; purpose?: "dev" | "evaluation" }[];
+  evalToggle: EvalToggle;
+}) {
   const [params, setParams] = useSearchParams();
   const agentRuns = useQuery({
     queryKey: ["agent-runs", run.run_id, segment.slug],
@@ -85,15 +96,22 @@ function SegmentRedesign({ run, segment, mined }: { run: Run; segment: Segment; 
   return (
     <>
       <Head run={run} segment={segment} detail={d} />
-      <ScopeBar base="redesign" run={run} segment={segment} mined={mined} />
+      <ScopeBar base="redesign" run={run} segment={segment} mined={mined} evalToggle={evalToggle} />
       {agentRuns.isError && <ApiProblem error={agentRuns.error} />}
 
-      <StartRun
-        run={run}
-        segment={segment}
-        open={agentRuns.isSuccess && list.length === 0}
-        onStarted={(id) => setParams({ agent: id })}
-      />
+      {purposeOf(run) === "evaluation" ? (
+        <Notice tone="wait">
+          This is an evaluation mining run{run.campaign_id ? ` (campaign ${run.campaign_id})` : ""}. Its agent runs are
+          made by the campaign runner, so it cannot be started from here; use a dev run to try the agent.
+        </Notice>
+      ) : (
+        <StartRun
+          run={run}
+          segment={segment}
+          open={agentRuns.isSuccess && list.length === 0}
+          onStarted={(id) => setParams({ agent: id })}
+        />
+      )}
 
       {list.length > 1 && (
         <div className="field" style={{ maxWidth: 520 }}>

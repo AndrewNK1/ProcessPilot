@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { purposeLabel, purposeOf } from "./runPurpose";
 import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Database, GitPullRequestArrow, Menu, Monitor, Moon, ScanSearch, Sun, X } from "lucide-react";
@@ -118,7 +119,12 @@ function Shell({ open, onClose }: { open: boolean; onClose: () => void }) {
         <>
           <div className="nav-label">Scope</div>
           <div className="scope">
-            <strong>{run.data?.preset ?? (run.data ? "Preset not named" : "…")}</strong>
+            <strong>
+              {run.data?.preset ?? (run.data ? "Preset not named" : "…")}
+              {run.data && (
+                <span className={`purpose-tag ${purposeOf(run.data)}`}>{purposeLabel(purposeOf(run.data))}</span>
+              )}
+            </strong>
             <span className="num">Run {scope.runId}</span>
           </div>
           {segment && (

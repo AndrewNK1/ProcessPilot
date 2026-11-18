@@ -312,6 +312,7 @@ def mine_log(
     source_description: dict[str, Any] | None = None,
     quality: DataQualityReport | None = None,
     progress: Progress | None = None,
+    preset_name: str | None = None,
 ) -> EvidenceStore:
     """Mine every segment and write the run folder; returns the merged evidence.
 
@@ -319,7 +320,11 @@ def mine_log(
     ``mine_segment`` refuses to run without one that is configured.
     ``quality`` (the report after cleaning, with its cleaning log) is written
     next to the evidence so a run records what was removed before mining.
+    ``preset_name`` is recorded as ``source.preset`` in the manifest, so the app
+    can tell which preset a run found on disk was mined with.
     """
+    if preset_name is not None:
+        source_description = {**(source_description or {}), "preset": preset_name}
     settings = MiningSettings.from_preset(preset)
     segments = split_by_segment(clean)
     results = []

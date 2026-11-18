@@ -137,6 +137,9 @@ export interface RunSummary {
   preset: string | null;
   evidence_count: number;
   created_at: string;
+  // Evaluation Phase 4: evaluation mining runs come from scripts/eval and take no app agent runs.
+  purpose?: "dev" | "evaluation";
+  campaign_id?: string | null;
 }
 
 export interface EvidenceItem {

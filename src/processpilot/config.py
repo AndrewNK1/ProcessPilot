@@ -24,6 +24,7 @@ _CONFIGS_DIRNAME = "configs"
 _CACHE_DIR_ENV = "PP_CACHE_DIR"
 _RUNS_DIR_ENV = "PP_RUNS_DIR"
 _APP_DIR_ENV = "PP_APP_DIR"
+_EVAL_DIR_ENV = "PP_EVAL_DIR"
 
 
 def find_project_root(start: Path | str | None = None) -> Path:
@@ -74,6 +75,12 @@ def default_app_dir() -> Path:
     """The API's own state (SQLite index, uploads): ``$PP_APP_DIR`` or ``<root>/outputs/app``."""
     override = os.environ.get(_APP_DIR_ENV)
     return Path(override) if override else find_project_root() / "outputs" / "app"
+
+
+def default_eval_dir() -> Path:
+    """Evaluation campaigns: ``$PP_EVAL_DIR`` or ``<root>/outputs/eval``."""
+    override = os.environ.get(_EVAL_DIR_ENV)
+    return Path(override) if override else find_project_root() / "outputs" / "eval"
 
 
 def resolve_preset_path(name_or_path: Path | str) -> Path:

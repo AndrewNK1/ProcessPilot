@@ -354,3 +354,43 @@ def test_failed_job_keeps_its_error(tmp_path: Path) -> None:
     job = ws.db.job(ws.jobs.submit("test", {}, boom))
     assert job["status"] == "failed" and job["error"] == "ValueError: no such column"
     assert job["message"] == "about to fail"
+
+
+# --- evaluation Phase 4: run purpose, presets of disk runs ----------------------------
+
+
+def test_disk_run_with_a_preset_in_its_manifest_is_registered_with_it(tmp_path: Path) -> None:
+    named = _fixture_run(tmp_path)
+    manifest_path = tmp_path / "runs" / named / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["source"] = {"preset": "generic"}
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    other = tmp_path / "runs" / "20260102T000000Z"
+    other.mkdir()
+    (other / "manifest.json").write_text(
+        json.dumps({"segments": {}, "source": {"preset": "no-such-preset"}}), encoding="utf-8"
+    )
+    with TestClient(create_app(_workspace(tmp_path))) as client:
+        listed = {r["run_id"]: r for r in client.get("/runs").json()}
+    assert listed[named]["preset"] == "generic"
+    assert listed["20260102T000000Z"]["preset"] is None  # never guessed
+    assert {r["purpose"] for r in listed.values()} == {"dev"}
+
+
+def test_agent_start_on_an_evaluation_run_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_id = _fixture_run(tmp_path)
+    _script(monkeypatch, [valid_diagnosis(), valid_redesign()])
+    ws = _workspace(tmp_path)
+    ws.sync_runs()
+    ws.db.update_run(run_id, preset="generic", purpose="evaluation", campaign_id="eval-x")
+    with TestClient(create_app(ws)) as client:
+        run = client.get(f"/runs/{run_id}").json()
+        assert run["purpose"] == "evaluation" and run["campaign_id"] == "eval-x"
+        response = client.post(
+            f"/runs/{run_id}/segments/{SLUG}/agent-runs", json={"model_id": MODEL_ID}
+        )
+        assert response.status_code == 409
+        assert "campaign runner" in response.json()["detail"]
+        assert client.get(f"/runs/{run_id}/segments/{SLUG}/agent-runs").json() == []

@@ -14,6 +14,20 @@ behind "a human analyst approves or rejects every proposal".
 One short-lived connection per call: jobs run in worker threads, and
 ``sqlite3`` connections must not be shared across threads. WAL mode lets the
 UI read while a job writes.
+
+Schema versions are applied as steps (``_MIGRATIONS``), never by rebuilding:
+the decision log is an audit trail and must survive an upgrade. A new file
+gets the version-1 tables and then every step, so a fresh and an upgraded
+database end up identical. Before upgrading an existing file, a copy is
+written next to it (``<name>.bak-v<old>``).
+
+History:
+
+1. datasets, runs, agent_runs, decisions, jobs.
+2. (2026-11-18, evaluation Phase 4) ``purpose`` (dev | evaluation) and
+   ``campaign_id`` on runs and agent_runs, ``launched_by`` (app | batch) and
+   ``condition`` (processpilot | baseline) on agent_runs; every existing row
+   becomes ``dev``. New tables ``eval_campaigns`` and ``eval_runs``.
 """
 
 from __future__ import annotations
@@ -26,8 +40,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
+PURPOSES = ("dev", "evaluation")
+
+# The version-1 tables; later columns and tables come from _MIGRATIONS.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
@@ -92,6 +109,50 @@ CREATE TABLE IF NOT EXISTS jobs (
 """
 
 
+_MIGRATIONS: dict[int, str] = {
+    2: """
+ALTER TABLE runs ADD COLUMN purpose TEXT NOT NULL DEFAULT 'dev'
+    CHECK (purpose IN ('dev', 'evaluation'));
+ALTER TABLE runs ADD COLUMN campaign_id TEXT;
+ALTER TABLE agent_runs ADD COLUMN purpose TEXT NOT NULL DEFAULT 'dev'
+    CHECK (purpose IN ('dev', 'evaluation'));
+ALTER TABLE agent_runs ADD COLUMN campaign_id TEXT;
+ALTER TABLE agent_runs ADD COLUMN launched_by TEXT NOT NULL DEFAULT 'app'
+    CHECK (launched_by IN ('app', 'batch'));
+ALTER TABLE agent_runs ADD COLUMN condition TEXT NOT NULL DEFAULT 'processpilot'
+    CHECK (condition IN ('processpilot', 'baseline'));
+
+CREATE TABLE eval_campaigns (
+    id              TEXT PRIMARY KEY,
+    created_at      TEXT NOT NULL,
+    manifest_json   TEXT NOT NULL,          -- copy of outputs/eval/<id>/manifest.json
+    manifest_sha256 TEXT NOT NULL,
+    status          TEXT NOT NULL
+                    CHECK (status IN ('draft', 'sealed', 'running', 'finished'))
+);
+
+CREATE TABLE eval_runs (
+    campaign_id    TEXT NOT NULL REFERENCES eval_campaigns (id),
+    segment        TEXT NOT NULL,
+    condition      TEXT NOT NULL CHECK (condition IN ('processpilot', 'baseline')),
+    repetition     INTEGER NOT NULL CHECK (repetition BETWEEN 1 AND 5),
+    status         TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'running', 'done', 'failed', 'quota_stopped')),
+    outcome        TEXT,                    -- e.g. reached_review, failed_validation
+    attempt_count  INTEGER NOT NULL DEFAULT 0,
+    agent_run_id   TEXT,
+    baseline_path  TEXT,
+    calls_used     INTEGER,
+    input_tokens   INTEGER,
+    output_tokens  INTEGER,
+    started_at     TEXT,
+    finished_at    TEXT,
+    PRIMARY KEY (campaign_id, segment, condition, repetition)
+);
+""",
+}
+
+
 def utc_now() -> str:
     """ISO-8601 UTC timestamp, the only time format stored."""
     return datetime.now(UTC).isoformat(timespec="seconds")
@@ -109,23 +170,63 @@ class Database:
     """Typed access to the API's SQLite file. Rows come back as plain dicts."""
 
     def __init__(self, path: Path) -> None:
-        """Create the file and schema if needed."""
+        """Create the file and schema if needed; upgrade an older schema step by step."""
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
             row = conn.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
-            if row is None:
-                conn.execute(
-                    "INSERT INTO meta (key, value) VALUES ('schema_version', ?)",
-                    (str(SCHEMA_VERSION),),
+            if row is None:  # a new file: the version-1 tables were just created
+                conn.execute("INSERT INTO meta (key, value) VALUES ('schema_version', '1')")
+                version, existing = 1, False
+            else:
+                version, existing = int(row["value"]), True
+        if version > SCHEMA_VERSION:
+            raise RuntimeError(
+                f"{self.path} has schema version {version}, newer than this code's "
+                f"{SCHEMA_VERSION}; update the code instead of downgrading the database"
+            )
+        if version < SCHEMA_VERSION:
+            if existing:
+                self.backup_path = self._backup(version)
+            self._migrate(version)
+
+    backup_path: Path | None = None
+
+    def _backup(self, version: int) -> Path:
+        """Copy the database before upgrading it (SQLite's backup API, safe under WAL)."""
+        target = self.path.with_name(f"{self.path.name}.bak-v{version}")
+        if target.exists():
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+            target = self.path.with_name(f"{self.path.name}.bak-v{version}-{stamp}")
+        src = sqlite3.connect(self.path)
+        dst = sqlite3.connect(target)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        return target
+
+    def _migrate(self, version: int) -> None:
+        """Apply every step after ``version``; each step is one transaction."""
+        for step in range(version + 1, SCHEMA_VERSION + 1):
+            conn = sqlite3.connect(self.path, timeout=30)
+            try:
+                # executescript commits on its own, so the step brackets itself.
+                conn.executescript(
+                    "BEGIN;\n"
+                    + _MIGRATIONS[step]
+                    + f"\nUPDATE meta SET value = '{step}' WHERE key = 'schema_version';"
+                    + "\nCOMMIT;"
                 )
-            elif int(row["value"]) != SCHEMA_VERSION:
-                raise RuntimeError(
-                    f"{self.path} has schema version {row['value']}, this code expects "
-                    f"{SCHEMA_VERSION}; it is an index, so it can be deleted and rebuilt"
-                )
+            except sqlite3.Error:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -199,10 +300,14 @@ class Database:
         cleaning: dict[str, Any] | None = None,
         evidence_count: int | None = None,
         created_at: str | None = None,
+        purpose: str = "dev",
+        campaign_id: str | None = None,
     ) -> None:
         """Register a run (being mined by the app, or found on disk)."""
         self._run(
-            "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO runs (run_id, origin, status, dataset_id, preset, cleaning_json, "
+            "evidence_count, created_at, purpose, campaign_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 origin,
@@ -212,6 +317,8 @@ class Database:
                 _dumps(cleaning),
                 evidence_count,
                 created_at or utc_now(),
+                purpose,
+                campaign_id,
             ),
         )
 
@@ -230,8 +337,8 @@ class Database:
         return rows
 
     def update_run(self, run_id: str, **fields: Any) -> None:
-        """Set ``status``, ``preset`` and/or ``evidence_count``."""
-        allowed = {"status", "preset", "evidence_count"}
+        """Set ``status``, ``preset``, ``evidence_count``, ``purpose`` or ``campaign_id``."""
+        allowed = {"status", "preset", "evidence_count", "purpose", "campaign_id"}
         if not fields or set(fields) - allowed:
             raise ValueError(f"can only update {sorted(allowed)}, got {sorted(fields)}")
         assignments = ", ".join(f"{k} = ?" for k in fields)
@@ -239,12 +346,35 @@ class Database:
 
     # --- agent runs ----------------------------------------------------------
 
-    def add_agent_run(self, run_id: str, segment: str, agent_run_id: str, model_id: str) -> None:
+    def add_agent_run(
+        self,
+        run_id: str,
+        segment: str,
+        agent_run_id: str,
+        model_id: str,
+        purpose: str = "dev",
+        campaign_id: str | None = None,
+        launched_by: str = "app",
+        condition: str = "processpilot",
+    ) -> None:
         """Register an agent run as soon as the graph has created it."""
         now = utc_now()
         self._run(
-            "INSERT INTO agent_runs VALUES (?, ?, ?, ?, 'running', ?, ?)",
-            (run_id, segment, agent_run_id, model_id, now, now),
+            "INSERT INTO agent_runs (run_id, segment, agent_run_id, model_id, status, "
+            "created_at, updated_at, purpose, campaign_id, launched_by, condition) "
+            "VALUES (?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?)",
+            (
+                run_id,
+                segment,
+                agent_run_id,
+                model_id,
+                now,
+                now,
+                purpose,
+                campaign_id,
+                launched_by,
+                condition,
+            ),
         )
 
     def set_agent_status(self, run_id: str, segment: str, agent_run_id: str, status: str) -> None:
@@ -271,6 +401,42 @@ class Database:
         return self._one(
             "SELECT * FROM agent_runs WHERE run_id = ? AND segment = ? AND agent_run_id = ?",
             (run_id, segment, agent_run_id),
+        )
+
+    # --- evaluation campaigns ----------------------------------------------
+
+    def add_campaign(
+        self, campaign_id: str, manifest: dict[str, Any], manifest_sha256: str, status: str
+    ) -> None:
+        """Register a campaign with a copy of its manifest (the file stays the source)."""
+        self._run(
+            "INSERT INTO eval_campaigns (id, created_at, manifest_json, manifest_sha256, status) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (campaign_id, utc_now(), _dumps(manifest), manifest_sha256, status),
+        )
+
+    def update_campaign(
+        self, campaign_id: str, manifest: dict[str, Any], manifest_sha256: str, status: str
+    ) -> None:
+        """Replace the manifest copy and status (e.g. on sealing)."""
+        self._run(
+            "UPDATE eval_campaigns SET manifest_json = ?, manifest_sha256 = ?, status = ? "
+            "WHERE id = ?",
+            (_dumps(manifest), manifest_sha256, status, campaign_id),
+        )
+
+    def campaign(self, campaign_id: str) -> dict[str, Any] | None:
+        """One campaign, with ``manifest`` decoded."""
+        row = self._one("SELECT * FROM eval_campaigns WHERE id = ?", (campaign_id,))
+        if row is not None:
+            row["manifest"] = _loads(row.pop("manifest_json"))
+        return row
+
+    def campaigns(self) -> list[dict[str, Any]]:
+        """All campaigns, newest first (manifest not decoded)."""
+        return self._all(
+            "SELECT id, created_at, manifest_sha256, status FROM eval_campaigns "
+            "ORDER BY created_at DESC, id DESC"
         )
 
     # --- decisions -----------------------------------------------------------
