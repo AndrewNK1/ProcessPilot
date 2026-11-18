@@ -1,0 +1,493 @@
+{
+  "answer_key_version": 1,
+  "campaign_id": "eval-2026-11-v1",
+  "mining_run_id": "20261118T011500Z",
+  "evidence_schema_version": 3,
+  "evidence_sha256": "9c1f28531827fab25f886545b3e340ee4fc3e5f43cc4e50f8e03fe4b9eb74ebe",
+  "created_at": "2026-11-18T01:16:23+00:00",
+  "rule": {
+    "top_n_bottlenecks": 3,
+    "conformance_completed_share_gt": 0.01,
+    "text": "Per segment: the top 3 bottlenecks by impact (median wait x case share), plus every conformance rule violated in more than 1% of completed cases (strictly greater). If no rule passes, the key holds the bottlenecks only."
+  },
+  "matching": {
+    "strict": "the diagnosis cites the key item's evidence_id",
+    "lenient": "strict, or the diagnosis cites one of the item's related_evidence_ids, or (Phase 7) its text names the item's activities",
+    "related_evidence_ids": "bottleneck a -> b: the AW item of b and the HO/ST items on edge a -> b; conformance rule: the AW items of the activities the rule names"
+  },
+  "segments": [
+    {
+      "segment": "2-way match",
+      "bottlenecks": [
+        {
+          "evidence_id": "BN-01-2-way-match",
+          "kind": "bottleneck",
+          "rank": 1,
+          "source": "Change Approval for Purchase Order",
+          "target": "Vendor creates invoice",
+          "median_wait_seconds": 2531040.0,
+          "median_wait": "29.3 days",
+          "case_share": 0.19923371647509577,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Change Approval for Purchase Order' -> 'Vendor creates invoice' occurs in 19.9% of cases (208) with a median wait of 29.3 days (mean 49.2 days, P90 100.0 days); impact rank 1.",
+          "activities": [
+            "Change Approval for Purchase Order",
+            "Vendor creates invoice"
+          ],
+          "related_evidence_ids": [
+            "AW-01-2-way-match",
+            "ST-01-2-way-match"
+          ]
+        },
+        {
+          "evidence_id": "BN-02-2-way-match",
+          "kind": "bottleneck",
+          "rank": 2,
+          "source": "Vendor creates invoice",
+          "target": "Create Purchase Order Item",
+          "median_wait_seconds": 992550.0,
+          "median_wait": "11.5 days",
+          "case_share": 0.40804597701149425,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Vendor creates invoice' -> 'Create Purchase Order Item' occurs in 40.8% of cases (426) with a median wait of 11.5 days (mean 21.9 days, P90 33.6 days); impact rank 2.",
+          "activities": [
+            "Vendor creates invoice",
+            "Create Purchase Order Item"
+          ],
+          "related_evidence_ids": [
+            "AW-02-2-way-match",
+            "ST-02-2-way-match"
+          ]
+        },
+        {
+          "evidence_id": "BN-03-2-way-match",
+          "kind": "bottleneck",
+          "rank": 3,
+          "source": "Clear Invoice",
+          "target": "Change Approval for Purchase Order",
+          "median_wait_seconds": 3057360.0,
+          "median_wait": "35.4 days",
+          "case_share": 0.1206896551724138,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Clear Invoice' -> 'Change Approval for Purchase Order' occurs in 12.1% of cases (126) with a median wait of 35.4 days (mean 40.2 days, P90 76.9 days); impact rank 3.",
+          "activities": [
+            "Clear Invoice",
+            "Change Approval for Purchase Order"
+          ],
+          "related_evidence_ids": [
+            "AW-06-2-way-match",
+            "HO-01-2-way-match"
+          ]
+        }
+      ],
+      "conformance_items": [],
+      "key_contents": "bottlenecks only (no conformance rule above 1% of completed cases)",
+      "conformance_rates": [
+        {
+          "evidence_id": "CF-R-02-2-way-match",
+          "rule_id": "R-02",
+          "rule_name": "invoice_recorded_before_cleared",
+          "rule_type": "activity_a_before_activity_b",
+          "completed_violation_count": 0,
+          "completed_evaluated_cases": 168,
+          "completed_violation_share": 0.0,
+          "completed_excluded_cases": null,
+          "completed_excluded_ending_in": [],
+          "violation_count": 0,
+          "evaluated_cases": 303,
+          "violation_share": 0.0,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        },
+        {
+          "evidence_id": "CF-R-03-2-way-match",
+          "rule_id": "R-03",
+          "rule_name": "invoice_must_occur",
+          "rule_type": "activity_must_occur",
+          "completed_violation_count": 0,
+          "completed_evaluated_cases": 166,
+          "completed_violation_share": 0.0,
+          "completed_excluded_cases": 3,
+          "completed_excluded_ending_in": [
+            "Delete Purchase Order Item"
+          ],
+          "violation_count": 357,
+          "evaluated_cases": 1044,
+          "violation_share": 0.34195402298850575,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "segment": "3-way match, invoice after GR",
+      "bottlenecks": [
+        {
+          "evidence_id": "BN-01-3-way-match-invoice-after-gr",
+          "kind": "bottleneck",
+          "rank": 1,
+          "source": "Record Invoice Receipt",
+          "target": "Clear Invoice",
+          "median_wait_seconds": 1818720.0,
+          "median_wait": "21.1 days",
+          "case_share": 0.5166183065154313,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Record Invoice Receipt' -> 'Clear Invoice' occurs in 51.7% of cases (7,834) with a median wait of 21.1 days (mean 26.9 days, P90 64.0 days); impact rank 1.",
+          "activities": [
+            "Record Invoice Receipt",
+            "Clear Invoice"
+          ],
+          "related_evidence_ids": [
+            "AW-01-3-way-match-invoice-after-gr",
+            "HO-01-3-way-match-invoice-after-gr",
+            "ST-04-3-way-match-invoice-after-gr"
+          ]
+        },
+        {
+          "evidence_id": "BN-02-3-way-match-invoice-after-gr",
+          "kind": "bottleneck",
+          "rank": 2,
+          "source": "Record Goods Receipt",
+          "target": "Record Invoice Receipt",
+          "median_wait_seconds": 1638960.0,
+          "median_wait": "19.0 days",
+          "case_share": 0.3547876549723028,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Record Goods Receipt' -> 'Record Invoice Receipt' occurs in 35.5% of cases (5,380) with a median wait of 19.0 days (mean 33.5 days, P90 66.8 days); impact rank 2.",
+          "activities": [
+            "Record Goods Receipt",
+            "Record Invoice Receipt"
+          ],
+          "related_evidence_ids": [
+            "AW-02-3-way-match-invoice-after-gr",
+            "HO-02-3-way-match-invoice-after-gr",
+            "ST-03-3-way-match-invoice-after-gr"
+          ]
+        },
+        {
+          "evidence_id": "BN-03-3-way-match-invoice-after-gr",
+          "kind": "bottleneck",
+          "rank": 3,
+          "source": "Vendor creates invoice",
+          "target": "Record Invoice Receipt",
+          "median_wait_seconds": 1419060.0,
+          "median_wait": "16.4 days",
+          "case_share": 0.3270245317858085,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Vendor creates invoice' -> 'Record Invoice Receipt' occurs in 32.7% of cases (4,959) with a median wait of 16.4 days (mean 26.4 days, P90 66.5 days); impact rank 3.",
+          "activities": [
+            "Vendor creates invoice",
+            "Record Invoice Receipt"
+          ],
+          "related_evidence_ids": [
+            "AW-02-3-way-match-invoice-after-gr",
+            "ST-01-3-way-match-invoice-after-gr"
+          ]
+        }
+      ],
+      "conformance_items": [],
+      "key_contents": "bottlenecks only (no conformance rule above 1% of completed cases)",
+      "conformance_rates": [
+        {
+          "evidence_id": "CF-R-01-3-way-match-invoice-after-gr",
+          "rule_id": "R-01",
+          "rule_name": "three_way_match_order",
+          "rule_type": "activity_a_before_activity_b",
+          "completed_violation_count": 0,
+          "completed_evaluated_cases": 9241,
+          "completed_violation_share": 0.0,
+          "completed_excluded_cases": null,
+          "completed_excluded_ending_in": [],
+          "violation_count": 0,
+          "evaluated_cases": 11110,
+          "violation_share": 0.0,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        },
+        {
+          "evidence_id": "CF-R-02-3-way-match-invoice-after-gr",
+          "rule_id": "R-02",
+          "rule_name": "invoice_recorded_before_cleared",
+          "rule_type": "activity_a_before_activity_b",
+          "completed_violation_count": 4,
+          "completed_evaluated_cases": 9241,
+          "completed_violation_share": 0.00043285358727410453,
+          "completed_excluded_cases": null,
+          "completed_excluded_ending_in": [],
+          "violation_count": 7,
+          "evaluated_cases": 9656,
+          "violation_share": 0.0007249378624689313,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        },
+        {
+          "evidence_id": "CF-R-03-3-way-match-invoice-after-gr",
+          "rule_id": "R-03",
+          "rule_name": "invoice_must_occur",
+          "rule_type": "activity_must_occur",
+          "completed_violation_count": 2,
+          "completed_evaluated_cases": 9242,
+          "completed_violation_share": 0.00021640337589266391,
+          "completed_excluded_cases": 302,
+          "completed_excluded_ending_in": [
+            "Delete Purchase Order Item"
+          ],
+          "violation_count": 4054,
+          "evaluated_cases": 15164,
+          "violation_share": 0.267343708783962,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        },
+        {
+          "evidence_id": "CF-R-04-3-way-match-invoice-after-gr",
+          "rule_id": "R-04",
+          "rule_name": "goods_receipt_required_for_three_way",
+          "rule_type": "activity_must_occur",
+          "completed_violation_count": 1,
+          "completed_evaluated_cases": 9242,
+          "completed_violation_share": 0.00010820168794633196,
+          "completed_excluded_cases": 302,
+          "completed_excluded_ending_in": [
+            "Delete Purchase Order Item"
+          ],
+          "violation_count": 643,
+          "evaluated_cases": 15164,
+          "violation_share": 0.042403059878659985,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "segment": "3-way match, invoice before GR",
+      "bottlenecks": [
+        {
+          "evidence_id": "BN-01-3-way-match-invoice-before-gr",
+          "kind": "bottleneck",
+          "rank": 1,
+          "source": "Record Invoice Receipt",
+          "target": "Clear Invoice",
+          "median_wait_seconds": 3213240.0,
+          "median_wait": "37.2 days",
+          "case_share": 0.5637525571627713,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Record Invoice Receipt' -> 'Clear Invoice' occurs in 56.4% of cases (124,560) with a median wait of 37.2 days (mean 45.1 days, P90 92.0 days); impact rank 1.",
+          "activities": [
+            "Record Invoice Receipt",
+            "Clear Invoice"
+          ],
+          "related_evidence_ids": [
+            "AW-01-3-way-match-invoice-before-gr",
+            "HO-01-3-way-match-invoice-before-gr",
+            "ST-02-3-way-match-invoice-before-gr"
+          ]
+        },
+        {
+          "evidence_id": "BN-02-3-way-match-invoice-before-gr",
+          "kind": "bottleneck",
+          "rank": 2,
+          "source": "Record Goods Receipt",
+          "target": "Record Invoice Receipt",
+          "median_wait_seconds": 1057260.0,
+          "median_wait": "12.2 days",
+          "case_share": 0.4804524141426942,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Record Goods Receipt' -> 'Record Invoice Receipt' occurs in 48.0% of cases (106,155) with a median wait of 12.2 days (mean 21.0 days, P90 46.9 days); impact rank 2.",
+          "activities": [
+            "Record Goods Receipt",
+            "Record Invoice Receipt"
+          ],
+          "related_evidence_ids": [
+            "AW-02-3-way-match-invoice-before-gr",
+            "HO-02-3-way-match-invoice-before-gr",
+            "ST-05-3-way-match-invoice-before-gr"
+          ]
+        },
+        {
+          "evidence_id": "BN-03-3-way-match-invoice-before-gr",
+          "kind": "bottleneck",
+          "rank": 3,
+          "source": "Remove Payment Block",
+          "target": "Clear Invoice",
+          "median_wait_seconds": 2374860.0,
+          "median_wait": "27.5 days",
+          "case_share": 0.2136068215145645,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Remove Payment Block' -> 'Clear Invoice' occurs in 21.4% of cases (47,196) with a median wait of 27.5 days (mean 37.0 days, P90 93.0 days); impact rank 3.",
+          "activities": [
+            "Remove Payment Block",
+            "Clear Invoice"
+          ],
+          "related_evidence_ids": [
+            "AW-01-3-way-match-invoice-before-gr",
+            "HO-03-3-way-match-invoice-before-gr",
+            "ST-03-3-way-match-invoice-before-gr"
+          ]
+        }
+      ],
+      "conformance_items": [],
+      "key_contents": "bottlenecks only (no conformance rule above 1% of completed cases)",
+      "conformance_rates": [
+        {
+          "evidence_id": "CF-R-02-3-way-match-invoice-before-gr",
+          "rule_id": "R-02",
+          "rule_name": "invoice_recorded_before_cleared",
+          "rule_type": "activity_a_before_activity_b",
+          "completed_violation_count": 6,
+          "completed_evaluated_cases": 171498,
+          "completed_violation_share": 3.4985830738550885e-05,
+          "completed_excluded_cases": null,
+          "completed_excluded_ending_in": [],
+          "violation_count": 17,
+          "evaluated_cases": 173254,
+          "violation_share": 9.812183268495966e-05,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        },
+        {
+          "evidence_id": "CF-R-03-3-way-match-invoice-before-gr",
+          "rule_id": "R-03",
+          "rule_name": "invoice_must_occur",
+          "rule_type": "activity_must_occur",
+          "completed_violation_count": 375,
+          "completed_evaluated_cases": 171845,
+          "completed_violation_share": 0.0021821990747475923,
+          "completed_excluded_cases": 7414,
+          "completed_excluded_ending_in": [
+            "Delete Purchase Order Item"
+          ],
+          "violation_count": 21446,
+          "evaluated_cases": 220948,
+          "violation_share": 0.09706356246718685,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        },
+        {
+          "evidence_id": "CF-R-04-3-way-match-invoice-before-gr",
+          "rule_id": "R-04",
+          "rule_name": "goods_receipt_required_for_three_way",
+          "rule_type": "activity_must_occur",
+          "completed_violation_count": 516,
+          "completed_evaluated_cases": 171845,
+          "completed_violation_share": 0.003002705926852687,
+          "completed_excluded_cases": 7414,
+          "completed_excluded_ending_in": [
+            "Delete Purchase Order Item"
+          ],
+          "violation_count": 14536,
+          "evaluated_cases": 220948,
+          "violation_share": 0.06578923547622065,
+          "activities_missing_from_segment": [],
+          "in_key": false,
+          "reason": "completed-case share at or below 1%"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "segment": "Consignment",
+      "bottlenecks": [
+        {
+          "evidence_id": "BN-01-consignment",
+          "kind": "bottleneck",
+          "rank": 1,
+          "source": "Create Purchase Order Item",
+          "target": "Record Goods Receipt",
+          "median_wait_seconds": 1720950.0,
+          "median_wait": "19.9 days",
+          "case_share": 0.8234239205407643,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Create Purchase Order Item' -> 'Record Goods Receipt' occurs in 82.3% of cases (11,938) with a median wait of 19.9 days (mean 23.1 days, P90 44.0 days); impact rank 1.",
+          "activities": [
+            "Create Purchase Order Item",
+            "Record Goods Receipt"
+          ],
+          "related_evidence_ids": [
+            "AW-01-consignment",
+            "HO-01-consignment",
+            "ST-02-consignment"
+          ]
+        },
+        {
+          "evidence_id": "BN-02-consignment",
+          "kind": "bottleneck",
+          "rank": 2,
+          "source": "Receive Order Confirmation",
+          "target": "Record Goods Receipt",
+          "median_wait_seconds": 1422300.0,
+          "median_wait": "16.5 days",
+          "case_share": 0.04393709477169265,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Receive Order Confirmation' -> 'Record Goods Receipt' occurs in 4.4% of cases (637) with a median wait of 16.5 days (mean 21.4 days, P90 43.7 days); impact rank 2.",
+          "activities": [
+            "Receive Order Confirmation",
+            "Record Goods Receipt"
+          ],
+          "related_evidence_ids": [
+            "AW-01-consignment",
+            "HO-02-consignment",
+            "ST-04-consignment"
+          ]
+        },
+        {
+          "evidence_id": "BN-03-consignment",
+          "kind": "bottleneck",
+          "rank": 3,
+          "source": "Create Purchase Order Item",
+          "target": "Change Quantity",
+          "median_wait_seconds": 682440.0,
+          "median_wait": "7.9 days",
+          "case_share": 0.05897365153814319,
+          "rule_id": null,
+          "rule_name": null,
+          "completed_violation_share": null,
+          "summary": "Transition 'Create Purchase Order Item' -> 'Change Quantity' occurs in 5.9% of cases (855) with a median wait of 7.9 days (mean 12.1 days, P90 30.9 days); impact rank 3.",
+          "activities": [
+            "Create Purchase Order Item",
+            "Change Quantity"
+          ],
+          "related_evidence_ids": [
+            "AW-02-consignment",
+            "HO-05-consignment"
+          ]
+        }
+      ],
+      "conformance_items": [],
+      "key_contents": "bottlenecks only (no conformance rule applies to this segment)",
+      "conformance_rates": [],
+      "notes": []
+    }
+  ]
+}

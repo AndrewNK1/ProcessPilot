@@ -1,0 +1,3 @@
+# Byte-exact copies: their SHA-256 must match the values in the campaign manifest
+# and the phase log, so git must not convert line endings.
+* -text

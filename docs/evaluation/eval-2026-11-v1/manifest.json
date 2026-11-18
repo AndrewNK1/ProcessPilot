@@ -1,0 +1,81 @@
+{
+  "campaign_id": "eval-2026-11-v1",
+  "status": "draft",
+  "created_at": "2026-11-18T01:16:28+00:00",
+  "sealed_at": null,
+  "git_tag": null,
+  "frozen": {
+    "mining_run_id": "20261118T011500Z",
+    "run_dir": "outputs/runs/20261118T011500Z",
+    "preset": "bpi2019",
+    "preset_sha256": "67e3cbef77cc9a2385f76d03a2b1d12280f27fdfcb6a4f0addfe5375948c01c5",
+    "evidence_schema_version": 3,
+    "mining_git_commit": "24303fd9b2fd260411938a7303f1cc824391b5c5",
+    "cleaning_policy": {
+      "drop_cases_with_missing_values": false,
+      "drop_cases_with_out_of_range_timestamps": true,
+      "drop_single_event_cases": false,
+      "drop_exact_duplicate_events": false
+    },
+    "source": {
+      "path": "C:\\Users\\user\\Desktop\\Thesis\\Data\\BPI_Challenge_2019.xes",
+      "size_bytes": 728558522,
+      "sha256": "af63bc687fc4152f2123b05c3af7772b37ef3fce2d3f67f812666c9e356baae7"
+    },
+    "segments": {
+      "2-way match": "2-way-match",
+      "3-way match, invoice after GR": "3-way-match-invoice-after-gr",
+      "3-way match, invoice before GR": "3-way-match-invoice-before-gr",
+      "Consignment": "consignment"
+    },
+    "files": {
+      "manifest.json": "2826a14469c495fe0823f9af1144310ab9805058e4e17b9a1b4d0f5a485d7934",
+      "evidence.json": "9c1f28531827fab25f886545b3e340ee4fc3e5f43cc4e50f8e03fe4b9eb74ebe",
+      "data_quality.json": "86aee5009f3a809ac676b299617f4d7b3cf6c898b7a61690875b82bb4f631c60",
+      "eval_mining.json": "9698e7f8a6052cf2e1dcf7a2ac0325aafce97e30259d320aa085ebb52692b171",
+      "2-way-match/evidence.json": "4d885dcd5ce6922b0d1873cca31acaf65507d18c89eca2e33717f6f99143e38d",
+      "2-way-match/dfg.json": "2400904353490c0086cdbb72bd72092f8a775443f90effa0f830d7a382bfead9",
+      "2-way-match/as_is_tree.json": "f560b25f6944e3975e1bedcd387b180174d005f52cf95c965d5eec7a34058f03",
+      "2-way-match/case_waits.parquet": "a8b724a7d136d09fbae783c807d5276c1780d0ae416e6e16cb06158e6aa5b4e1",
+      "2-way-match/as_is.bpmn": "a1e1859cc274f98f9f4a208834907190cb210d163cf37c08c4597f68d2b606a1",
+      "2-way-match/activity_waits.json": "082ff5af26fc435372b660ef4d44343fae45cdc77b8ee0d543e0e5d3501c1f14",
+      "3-way-match-invoice-after-gr/evidence.json": "4a6c000cbd3c71f812e74cd5c6b31c43bc9722927832e9cf574025915bf56e90",
+      "3-way-match-invoice-after-gr/dfg.json": "5dbe7d1be57adea087dab1944fa1348979af50f00c37d6d2e7f4fe3009d39d9c",
+      "3-way-match-invoice-after-gr/as_is_tree.json": "7b21dc83e3b4d75fb9ed1a2fa1dbe3b03ab16dfe10c2921e1013f7cb1db6cd71",
+      "3-way-match-invoice-after-gr/case_waits.parquet": "ffea88a47f9dd7aa81ff0d052c69e542fe892c959995bed0beea6a47553b454a",
+      "3-way-match-invoice-after-gr/as_is.bpmn": "c48f62b2bb7ac2f853e8c8fda2551cd472431e41d7638e36edd4e9c3bea759fc",
+      "3-way-match-invoice-after-gr/activity_waits.json": "da7e1d2faf9cac6bc304d9cd8baee7cd34009837bc738abf7cee37c634e383e0",
+      "3-way-match-invoice-before-gr/evidence.json": "d75223bd5827734bcc117bb6aa6674ea367d7262bec0b62c14fa8a2591b3fbf2",
+      "3-way-match-invoice-before-gr/dfg.json": "c9d8902d5606b3255531696abbe05ef2e77693eb6c009bca53a1132059e62d03",
+      "3-way-match-invoice-before-gr/as_is_tree.json": "cbd2b08fda96a07da3c8b9cebf08eefcf4a0cb666d498783892703f64fdc7803",
+      "3-way-match-invoice-before-gr/case_waits.parquet": "cd406366525bd5d7014ab7d5d2350c9b06897dac3c80e6307b47009414a56c73",
+      "3-way-match-invoice-before-gr/as_is.bpmn": "f5ee65cf2028e31f7732a6a9410d1a07d65e052b577b61b4b889053f93541af7",
+      "3-way-match-invoice-before-gr/activity_waits.json": "8c565240cb9fab1d4183f235992c269c6e5324b643c42cb50de1047bf3e29122",
+      "consignment/evidence.json": "cbfe0850d810019a9d5777fe7726ad64cb3ea9da3f3f81aa08dddce4528416d5",
+      "consignment/dfg.json": "83c183a91049a7719313d740a8f50c56ab05d4e13704c63aa038f43376f2c2fb",
+      "consignment/as_is_tree.json": "7e80ea00e72f6928bc6306b930b7bd4ad7addacee06d07cbd3282f1f256a160f",
+      "consignment/case_waits.parquet": "9487f2fd668d99aa04df8a391c006d30124f3f97abc7cda8b4900f45014bf2f6",
+      "consignment/as_is.bpmn": "08b02f1b3bca294600985c769176bcaae95ffb1b4846a535d043241437be2c32",
+      "consignment/activity_waits.json": "d90521edfdf90d90d6617e87eb9e200292a5483af3f66747b1902a9b81fcc726"
+    }
+  },
+  "answer_key": {
+    "json_path": "answer_key.json",
+    "csv_path": "answer_key.csv",
+    "sha256": "3733312a1dd5fd19d866bd094efe9644daed8873c3cd3427c16c1fca1f7ddb28"
+  },
+  "design": {
+    "segments": [
+      "2-way match",
+      "3-way match, invoice after GR",
+      "3-way match, invoice before GR",
+      "Consignment"
+    ],
+    "repetitions": 5,
+    "conditions": [
+      "processpilot",
+      "baseline"
+    ]
+  },
+  "environment": null
+}
