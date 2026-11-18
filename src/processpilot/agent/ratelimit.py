@@ -13,9 +13,20 @@ SDK's own retries hide how many requests were really sent. So:
   counts against the budget whatever its outcome, 429s included (user
   decision 2026-11-18: whether Google counts rejected requests is
   UNVERIFIED, so counting them is the safe side);
-- a 429 "per minute", a 5xx or a timeout is waited out and repeated
-  (``transport retry``, capped, reported apart from validation retries); a
-  429 "per day" stops the run (``QuotaStopped``) with the next reset time.
+- a 429 "per minute" is waited out (its ``retryDelay``, else
+  ``default_retry_seconds``) and repeated; a 5xx or a timeout (the client
+  gives up after ``timeout`` in ``configs/agent.yaml``) is repeated after
+  increasing waits (``server_retry_seconds``: 60, 120, 240 s; one retry per
+  entry). Both are ``transport retries``, capped and reported apart from
+  validation retries. A 429 "per day" stops the run (``QuotaStopped``) with
+  the next reset time.
+
+WHY increasing waits for server errors (user decision 2026-11-18): the first
+live smoke run met a Gemini overload ("503 UNAVAILABLE ... high demand");
+three retries 65 s apart all failed within five minutes, and the last request
+hung for almost 12 minutes before its 503. Spacing the retries over about
+seven minutes gives a temporary overload time to pass; the timeout bounds a
+hung request.
 
 The quota day is the calendar day in ``quota_timezone`` (America/Los_Angeles;
 it resets at local midnight, computed with ``zoneinfo``, so DST is handled);
@@ -62,7 +73,8 @@ class RateLimitSettings(BaseModel):
     display_timezone: str
     default_retry_seconds: float = Field(gt=0)
     max_transport_retries: int = Field(ge=0)
-    max_server_retries: int = Field(ge=0)
+    # Waits before each retry after a 5xx or timeout; the length is the cap.
+    server_retry_seconds: list[float] = Field(default_factory=list)
     ledger: str
 
     @classmethod
@@ -238,9 +250,10 @@ def classify(exc: BaseException) -> tuple[ErrorKind, float | None]:
         if "PerMinute" in text:
             return "minute", delay
         return "unclassified_429", delay
-    timeouts = ("Timeout", "TimeoutError", "ReadTimeout", "ConnectTimeout")
+    # httpx raises ReadTimeout/ConnectTimeout/... (subclasses of TimeoutException)
+    # when the client's request timeout expires; Python's own is TimeoutError.
     if any(isinstance(c, int) and c >= 500 for c in codes) or any(
-        type(e).__name__ in timeouts for e in _chain(exc)
+        isinstance(e, TimeoutError) or "Timeout" in type(e).__name__ for e in _chain(exc)
     ):
         return "server", delay
     return "other", delay
@@ -436,7 +449,7 @@ class RateLimitedLLM:
                     ) from exc
                 if kind == "other":
                     raise
-                cap = s.max_server_retries if kind == "server" else s.max_transport_retries
+                cap = len(s.server_retry_seconds) if kind == "server" else s.max_transport_retries
                 counts[kind] += 1
                 if counts[kind] > cap:
                     if kind == "server":
@@ -450,7 +463,10 @@ class RateLimitedLLM:
                         b.reset,
                         b.reset_shown,
                     ) from exc
-                wait = delay if delay is not None else s.default_retry_seconds
+                if kind == "server":
+                    wait = s.server_retry_seconds[counts[kind] - 1]
+                else:
+                    wait = delay if delay is not None else s.default_retry_seconds
                 retries.append(
                     {
                         "request_id": request_id,

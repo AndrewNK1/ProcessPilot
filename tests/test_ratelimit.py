@@ -40,7 +40,7 @@ SETTINGS = RateLimitSettings(
     display_timezone="Africa/Cairo",
     default_retry_seconds=65,
     max_transport_retries=5,
-    max_server_retries=3,
+    server_retry_seconds=[60, 120, 240],
     ledger="outputs/quota/test.jsonl",
 )
 # 2026-11-18 01:30 UTC = 2026-11-17 17:30 in Los Angeles (PST, UTC-8).
@@ -225,21 +225,46 @@ def test_unclassified_429s_are_capped(tmp_path: Path) -> None:
     assert llm.inner.calls == 6
 
 
-def test_server_errors_retry_three_times_then_fail(tmp_path: Path) -> None:
+def test_server_errors_retry_with_increasing_waits_then_fail(tmp_path: Path) -> None:
     ok = _llm(tmp_path / "a", [FakeAPIError(503, {"error": {"code": 503}}), "m"])
     resp = _call(ok)
-    assert [r["kind"] for r in resp.transport_retries] == ["server"]
+    assert [(r["kind"], r["waited_seconds"]) for r in resp.transport_retries] == [("server", 60)]
     failing = _llm(tmp_path / "b", [FakeAPIError(500, {})] * 4 + ["m"])
     with pytest.raises(TransportFailed, match="3 transport retries"):
         _call(failing)
     assert failing.inner.calls == 4
+    assert failing.clock.waits == [60, 120, 240]  # each >= the 20 s gap, so no gap waits
+
+
+def test_server_error_ignores_retry_delay_but_429_uses_it(tmp_path: Path) -> None:
+    # 5xx follow the fixed schedule even if a delay is suggested; per-minute 429s
+    # keep using retryDelay (unchanged behaviour).
+    error = FakeAPIError(503, {"error": {"details": [{"retryDelay": "5s"}]}})
+    llm = _llm(tmp_path, [error, _quota_429("GenerateRequestsPerMinute", delay="9s"), "m"])
+    _call(llm)
+    assert llm.clock.waits == [60, 9, 11]  # 503 -> 60; 429 -> 9, then 11 s more for the 20 s gap
+
+
+def test_a_request_timeout_is_a_transport_retry(tmp_path: Path) -> None:
+    import httpx
+
+    timeout = httpx.ReadTimeout("The read operation timed out")
+    llm = _llm(tmp_path, [timeout, "m"])
+    resp = _call(llm)
+    assert [(r["kind"], r["waited_seconds"]) for r in resp.transport_retries] == [("server", 60)]
+    result = next(e for e in llm.ledger.entries() if e.get("outcome") == "error_server")
+    assert result["error"]["chain"][0]["type"] == "httpx.ReadTimeout"
 
 
 def test_timeouts_count_as_server_errors() -> None:
+    import httpx
+
     class ReadTimeout(Exception):
         pass
 
     assert classify(ReadTimeout("slow"))[0] == "server"
+    assert classify(httpx.ConnectTimeout("connect"))[0] == "server"
+    assert classify(TimeoutError("socket"))[0] == "server"
     assert classify(ValueError("bad request"))[0] == "other"
 
 
@@ -262,7 +287,7 @@ def test_eval_yaml_holds_the_decided_limits() -> None:
     )
     assert s.worst_case_calls == {"processpilot": 6, "baseline": 3}
     assert (s.quota_timezone, s.display_timezone) == ("America/Los_Angeles", "Africa/Cairo")
-    assert (s.max_transport_retries, s.max_server_retries) == (5, 3)
+    assert (s.max_transport_retries, s.server_retry_seconds) == (5, [60, 120, 240])
     assert s.limits("google_genai:gemini-3.6-flash") and not s.limits("anthropic:claude-opus-5-5")
 
 
@@ -290,10 +315,10 @@ def test_gemini_sdk_retries_are_off_in_the_built_request() -> None:
     chat = ChatGoogleGenerativeAI(model=bare_model_name(model_id), google_api_key="x", **kwargs)
     config = chat._prepare_request([HumanMessage(content="q")])["config"]
     assert config.http_options.retry_options.attempts == 1
+    # Request timeout 180 s, sent in milliseconds (google.genai HttpOptions.timeout).
+    assert kwargs["timeout"] == 180
+    assert config.http_options.timeout == 180_000
     default = ChatGoogleGenerativeAI(model=bare_model_name(model_id), google_api_key="x")
-    assert (
-        default._prepare_request([HumanMessage(content="q")])[
-            "config"
-        ].http_options.retry_options.attempts
-        == 6
-    )
+    default_options = default._prepare_request([HumanMessage(content="q")])["config"].http_options
+    assert default_options.retry_options.attempts == 6  # library default: hidden retries
+    assert default_options.timeout is None  # library default: no timeout

@@ -70,11 +70,16 @@ model:
     # retries"; its default is 6, which would send hidden requests that the
     # quota ledger cannot see. 429s, 5xx and timeouts are handled by
     # agent/ratelimit.py instead.
+    # timeout: 180 s per request (sent as 180000 ms in the request's
+    # http_options). Without it a request can hang: in the first smoke run
+    # (2026-11-18) Google held one for 11 min 42 s before answering 503. A
+    # timeout is a transport retry in agent/ratelimit.py.
     google_genai:
       seed: 42
       max_output_tokens: 16000
       thinking_level: medium
       max_retries: 1
+      timeout: 180
   # Caveats copied into every run's inputs.json and summary.json for the
   # provider in use, so a reader of the logs sees what a setting does not do.
   notes:

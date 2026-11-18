@@ -493,3 +493,20 @@ Show me a screenshot of each panel populated with the dry-run campaign. Web test
 - Tests: 620 Python (+30: `test_ratelimit.py`, `test_runner.py`), 16 web; ruff clean; bundle rebuilt.
 - Open: the live smoke run on 2-way match (needs Andrew's approval); 429 classification is
   UNVERIFIED until a real 429 payload is in the ledger.
+
+## Phase 5 smoke run 1 and follow-up (2026-11-18)
+
+- **Live smoke run 1** (approved by Andrew): `run_campaign.py --smoke "2-way match"`, agent run
+  `20261118T015241Z-smoke`, purpose dev, frozen run `20261118T011500Z`,
+  `google_genai:gemini-3.6-flash`. **Failed in `diagnose` before any model output**: all 4 requests
+  (01:52:41, 01:53:50, 01:54:55, 01:56:01 UTC) were answered `503 UNAVAILABLE` ("This model is
+  currently experiencing high demand"), no `retryDelay`; 3 transport retries 65 s apart, then
+  `TransportFailed`. The 4th request was held 11 min 42 s before its 503. 4 requests counted
+  (quota day 2026-11-17: 4 sent, 13 left), 0 validation retries, 0 tokens, no served model,
+  15 min 7 s in total. Exact payloads in `outputs/quota/google_genai.jsonl`. Limiter, ledger,
+  classification and the failure path behaved as designed; nothing was written into the frozen run.
+- **Follow-up (Andrew):** Gemini request timeout `timeout: 180` s in `configs/agent.yaml` (sent as
+  180000 ms in the request's `http_options`, tested on the built request; a timeout is a transport
+  retry). 5xx/timeouts now wait 60 s, 120 s, 240 s before retries 1-3 (`server_retry_seconds` in
+  `configs/eval.yaml`, replaces `max_server_retries`); per-minute 429 unchanged (`retryDelay`, else
+  65 s). The smoke run is repeated when Andrew says so (after the 10:00 Cairo reset).

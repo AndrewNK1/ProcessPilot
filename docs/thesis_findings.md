@@ -579,6 +579,19 @@ a late day affects all segments and conditions alike. A run whose output still f
 validation after the retries is a result and is never repeated. Runs stop at the human
 review step; no decision is taken in the evaluation.
 
+**First live smoke run (2026-11-18): provider overload.** One ProcessPilot run of 2-way
+match (development, not part of the campaign) failed before the model produced any output:
+all four requests were answered `503 UNAVAILABLE` ("This model is currently experiencing
+high demand"), and the last one was held by the server for 11 min 42 s before that answer.
+The four requests counted against the day's budget (4 of 17) without any model output.
+Consequences, decided by the user: a 180 s request timeout (a timeout is a transport
+retry), and increasing waits of 60, 120 and 240 s before the three retries after a server
+error or timeout, instead of a flat 65 s, so a temporary overload has time to pass.
+Per-minute 429s still wait for Google's `retryDelay` (else 65 s). For the thesis: provider
+availability is an external threat to the campaign's schedule (runs can be lost to
+overload, and the budget spent on them), not to its results, because a transport failure
+is retried as a new attempt and never counted as a model failure.
+
 ## 6. Limitations to state
 
 - Single-timestamp log: waiting and processing time cannot be separated.
@@ -606,6 +619,9 @@ review step; no decision is taken in the evaluation.
 - No reference model for BPI 2019, so there are no model-deviation findings.
 - Woflan does not scale to large models; soundness there rests on construction
   plus the structural check.
+- Provider availability: Gemini overload (503) can make runs fail before any output;
+  such runs are retried as new attempts, but the requests spent on them reduce the daily
+  budget and lengthen the campaign.
 - LLM outputs are not bit-reproducible (Opus 5.5 rejects sampling parameters;
   Gemini 3.6 Flash ignores temperature, and whether it honours the seed is
   UNVERIFIED).
@@ -706,3 +722,4 @@ API end to end: preset -> mine -> agent -> reject -> revise -> approve); BPI
 | 2026-11-18 | Gemini limits enforced in code: 20 s gap, 17 requests per Pacific day, worst-case check before a run (6 / 3), one shared ledger for app and runner |
 | 2026-11-18 | Every request sent counts against the budget, including 429s; SDK retries off; 5xx/timeouts handled like per-minute 429s (max 3 retries) |
 | 2026-11-18 | Campaign runs, logs and checkpoints live in the campaign folder; a stopped run is repeated as a new attempt and the cut-short attempt is kept |
+| 2026-11-18 | After the first smoke run met a Gemini overload: 180 s request timeout; 5xx/timeouts retried after 60, 120, 240 s (max 3); per-minute 429 unchanged |

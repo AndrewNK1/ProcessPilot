@@ -53,7 +53,7 @@ def _settings(**over: Any) -> RateLimitSettings:
         "display_timezone": "Africa/Cairo",
         "default_retry_seconds": 65,
         "max_transport_retries": 5,
-        "max_server_retries": 3,
+        "server_retry_seconds": [60, 120, 240],
         "ledger": "unused",
     }
     return RateLimitSettings.model_validate({**base, **over})

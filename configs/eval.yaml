@@ -36,7 +36,9 @@ rate_limit:
   display_timezone: Africa/Cairo      # reset times are shown in this zone
   default_retry_seconds: 65           # per-minute 429 without a retryDelay
   max_transport_retries: 5            # per call, for per-minute / unclassified 429s
-  max_server_retries: 3               # per call, for 5xx and timeouts
+  # 5xx and timeouts: one retry per entry, after these waits (increasing,
+  # user decision 2026-11-18, after the first smoke run met a Gemini overload).
+  server_retry_seconds: [60, 120, 240]
   # One ledger for the whole Google project (app and runner share the quota),
   # every line tagged with purpose/campaign. Relative to the project root;
   # $PP_QUOTA_LEDGER overrides it.
